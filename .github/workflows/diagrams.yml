@@ -36,7 +36,7 @@ jobs:
 
       - name: Upload PNGs (pull requests)
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: diagrams
           path: docs/diagrams/*.png
