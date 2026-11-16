@@ -9,3 +9,14 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "ci"
+
+  # Hash-locked CI lint tools (ruff, codespell, zizmor)
+  - package-ecosystem: pip
+    directory: /.github/requirements
+    schedule:
+      interval: weekly
+    groups:
+      lint-tools:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
