@@ -1,0 +1,121 @@
+<mxfile host="drawio" agent="ubuntu-airgap">
+  <diagram id="architecture" name="architecture">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="&lt;b&gt;ubuntu-airgap&lt;/b&gt; &amp;mdash; how an offline Ubuntu 26.04 machine gets its updates" style="text;html=1;fontSize=20;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Internet (upstream)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="270" height="600" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="&lt;b&gt;archive.ubuntu.com&lt;/b&gt;&lt;br&gt;resolute, -updates, -security&lt;br&gt;signed InRelease, dists/, pool/&lt;br&gt;amd64 (+ amd64v3)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="50" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="&lt;b&gt;Launchpad PPAs&lt;/b&gt;&lt;br&gt;api.launchpad.net &amp;rarr; key fingerprint&lt;br&gt;keyserver.ubuntu.com &amp;rarr; key" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="190" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="&lt;b&gt;Other apt repositories&lt;/b&gt;&lt;br&gt;--repo name=&amp;hellip;;url=&amp;hellip;;key=&amp;hellip;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="320" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="&lt;b&gt;Vendor repo-setup .deb&lt;/b&gt;&lt;br&gt;contains sources.list.d,&lt;br&gt;keyrings and preferences.d&lt;br&gt;(unpacked, never installed)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="430" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="Online machine (any Linux + Docker)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="330" y="60" width="450" height="600" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="&lt;b&gt;./ubuntu-airgap.sh download&lt;/b&gt; -d /media/disk/mirror&lt;br&gt;&lt;font color='#555'&gt;--components --amd64v3 --repo --ppa --repo-deb&lt;br&gt;--dry-run --package-filter --config&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n7">
+          <mxGeometry x="15" y="45" width="420" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="docker run ubuntu:26.04  (as your uid)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="n7">
+          <mxGeometry x="15" y="140" width="420" height="440" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;b&gt;1. expand extras&lt;/b&gt;&lt;br&gt;PPA &amp;rarr; Launchpad fingerprint &amp;rarr; verified key&lt;br&gt;repo-setup .deb &amp;rarr; dpkg-deb -x &amp;rarr; sources, keys, pins" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n9">
+          <mxGeometry x="15" y="45" width="390" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="&lt;b&gt;2. debmirror&lt;/b&gt; (one run per repository)&lt;br&gt;&amp;#10003; GPG signature of every Release&lt;br&gt;&amp;#10003; SHA256 of every index and .deb&lt;br&gt;incremental download + cleanup of old packages" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n9">
+          <mxGeometry x="15" y="160" width="390" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;b&gt;3. finish&lt;/b&gt;&lt;br&gt;by-hash/SHA256 links (like the real archive)&lt;br&gt;airgap-mirror.conf manifest, copy of the script" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n9">
+          <mxGeometry x="15" y="295" width="390" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n8" target="n9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n10" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n11" target="n12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n16" value="&lt;b&gt;Mirror disk&lt;/b&gt; (USB / external)&lt;br&gt;&lt;br&gt;&lt;div style='text-align:left;font-family:monospace;font-size:11px'&gt;mirror/&lt;br&gt;&amp;#9500; ubuntu/dists/ &amp;nbsp;signed indexes&lt;br&gt;&amp;#9500; ubuntu/pool/ &amp;nbsp;&amp;nbsp;.deb files&lt;br&gt;&amp;#9500; repos/&amp;lt;name&amp;gt;/ extra repos&lt;br&gt;&amp;#9500; keys/ &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;signing keys&lt;br&gt;&amp;#9500; prefs/ &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;apt pinning&lt;br&gt;&amp;#9500; setup-debs/ &amp;nbsp;&amp;nbsp;vendor .debs&lt;br&gt;&amp;#9500; airgap-mirror.conf&lt;br&gt;&amp;#9492; ubuntu-airgap.sh&lt;/div&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=18;fontSize=13;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="830" y="200" width="250" height="330" as="geometry" />
+        </mxCell>
+        <mxCell id="n17" value="Air-gapped machine (Ubuntu 26.04)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1190" y="60" width="430" height="600" as="geometry" />
+        </mxCell>
+        <mxCell id="n18" value="&lt;b&gt;sudo mirror/ubuntu-airgap.sh install&lt;/b&gt; [-y]" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="45" width="400" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n19" value="&lt;b&gt;1.&lt;/b&gt; move online sources to /var/backups/ubuntu-airgap" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="105" width="400" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n20" value="&lt;b&gt;2.&lt;/b&gt; write ubuntu-airgap.sources (deb822), keyrings,&lt;br&gt;pinning, 90ubuntu-airgap (phased, amd64v3 auto)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="165" width="400" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n21" value="&lt;b&gt;3.&lt;/b&gt; python3 -m http.server &amp;rarr; 127.0.0.1:8080" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="240" width="400" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n22" value="&lt;b&gt;4.&lt;/b&gt; apt update &amp;mdash; GPG verified with the stock&lt;br&gt;ubuntu-archive-keyring (no trusted=yes)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="300" width="400" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n23" value="&lt;b&gt;5.&lt;/b&gt; apt upgrade (or full-upgrade)&lt;br&gt;amd64v3 builds if the CPU supports x86-64-v3" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="375" width="400" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n24" value="&lt;b&gt;6.&lt;/b&gt; report 404s, stop server, reboot hint" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="450" width="400" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="n25" value="&lt;b&gt;serve&lt;/b&gt;: only run the HTTP server (apt install later, LAN sharing)&lt;br&gt;&lt;b&gt;restore&lt;/b&gt;: put the original apt sources back" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;" vertex="1" parent="n17">
+          <mxGeometry x="15" y="510" width="400" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n18" target="n19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n19" target="n20">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n20" target="n21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e29" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n21" target="n22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e30" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n22" target="n23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e31" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="n23" target="n24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e32" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n3" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e33" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;" edge="1" parent="1" source="n4" target="n10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e34" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e35" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="n6" target="n10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e36" value="writes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="n12" target="n16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e37" value="carry&lt;br&gt;the disk" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n16" target="n21">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

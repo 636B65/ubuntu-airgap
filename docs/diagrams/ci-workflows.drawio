@@ -1,0 +1,130 @@
+<mxfile host="drawio" agent="ubuntu-airgap">
+  <diagram id="ci-workflows" name="ci-workflows">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="&lt;b&gt;ubuntu-airgap&lt;/b&gt; &amp;mdash; GitHub Actions workflows" style="text;html=1;fontSize=20;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Triggers" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="220" height="580" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" value="push to main&lt;br&gt;pull request" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="45" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="weekly schedule&lt;br&gt;(catches upstream changes)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="120" width="190" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" value="tag v&lt;i&gt;X.Y.Z&lt;/i&gt;&lt;br&gt;(semver)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="355" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="change to&lt;br&gt;docs/diagrams/*.drawio" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="500" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="n7" value="dependabot&lt;br&gt;(weekly action updates)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="220" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="ci.yml" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="280" y="60" width="900" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="n9" value="&lt;b&gt;lint&lt;/b&gt;&lt;br&gt;ShellCheck &amp;middot; bash -n&lt;br&gt;ruff (embedded Python)&lt;br&gt;codespell &amp;middot; actionlint&lt;br&gt;markdownlint" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n8">
+          <mxGeometry x="15" y="45" width="200" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="&lt;b&gt;unit&lt;/b&gt;&lt;br&gt;tests/test_cli.sh&lt;br&gt;python unittest&lt;br&gt;(sources parsers)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n8">
+          <mxGeometry x="15" y="185" width="200" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="n11" value="e2e  (matrix: amd64, amd64v3)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="n8">
+          <mxGeometry x="260" y="45" width="620" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="&lt;b&gt;1.&lt;/b&gt; build desktop-like&lt;br&gt;client image" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n11">
+          <mxGeometry x="15" y="45" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n13" value="&lt;b&gt;2.&lt;/b&gt; build a vendor&lt;br&gt;repo-setup .deb" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n11">
+          <mxGeometry x="165" y="45" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="&lt;b&gt;3.&lt;/b&gt; download partial&lt;br&gt;mirror (real signed&lt;br&gt;indexes, few .debs)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n11">
+          <mxGeometry x="315" y="45" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n15" value="&lt;b&gt;4.&lt;/b&gt; client with&lt;br&gt;&lt;b&gt;--network none&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="n11">
+          <mxGeometry x="475" y="45" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n16" value="asserts: no 404s &amp;middot; nothing left to upgrade &amp;middot; packages install from Ubuntu, PPA and vendor repo &amp;middot; vendor pinning applied &amp;middot; amd64v3 build used (v3 job) &amp;middot; restore puts sources back" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;" vertex="1" parent="n11">
+          <mxGeometry x="15" y="135" width="590" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n12" target="n13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n13" target="n14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n14" target="n15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" value="needs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;" edge="1" parent="1" source="n9" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" value="needs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="n10" target="n11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n22" value="release.yml" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="280" y="380" width="900" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="n23" value="tag == VERSION in script&lt;br&gt;== CHANGELOG section" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n22">
+          <mxGeometry x="15" y="45" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n24" value="quick tests" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n22">
+          <mxGeometry x="260" y="45" width="140" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n25" value="notes from CHANGELOG.md" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="n22">
+          <mxGeometry x="445" y="45" width="190" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n26" value="&lt;b&gt;GitHub Release&lt;/b&gt;&lt;br&gt;script, example config,&lt;br&gt;SHA256SUMS" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="n22">
+          <mxGeometry x="680" y="40" width="200" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n23" target="n24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n24" target="n25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e29" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n25" target="n26">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n30" value="diagrams.yml" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="280" y="530" width="900" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n31" value="drawio-export (Docker)&lt;br&gt;.drawio &amp;rarr; .png" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="n30">
+          <mxGeometry x="15" y="40" width="220" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n32" value="commit PNGs back&lt;br&gt;(github-actions bot)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="n30">
+          <mxGeometry x="290" y="40" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n33" value="README.md shows&lt;br&gt;docs/diagrams/*.png" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="n30">
+          <mxGeometry x="545" y="40" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="e34" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n31" target="n32">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e35" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n32" target="n33">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e36" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n3" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e37" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n4" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e38" value="also runs CI" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;dashed=1;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e39" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e40" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n6" target="n30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,10 @@
+# local mirrors / test output
+/mirror/
+/mirror*/
+*.log
+airgap.conf
+tests/.airgap_helper_lint.py
+__pycache__/
+*.pyc
+/dist/
+.ruff_cache/

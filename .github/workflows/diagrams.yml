@@ -1,0 +1,54 @@
+name: Diagrams
+
+# Renders docs/diagrams/*.drawio to PNG (shown in README.md).
+# On main the PNGs are committed back; on pull requests they are uploaded as an
+# artifact so the change can be reviewed.
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/diagrams/**.drawio", ".github/workflows/diagrams.yml"]
+  pull_request:
+    paths: ["docs/diagrams/**.drawio", ".github/workflows/diagrams.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: diagrams-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: drawio → png
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export with draw.io
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD/docs/diagrams:/data" \
+            rlespinasse/drawio-export:v4.60.0 \
+            --format png --output . --remove-page-suffix --border 20 --scale 1.5
+          ls -l docs/diagrams
+
+      - name: Upload PNGs (pull requests)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagrams
+          path: docs/diagrams/*.png
+
+      - name: Commit updated PNGs (main)
+        if: github.event_name != 'pull_request'
+        run: |
+          git add docs/diagrams/*.png
+          if git diff --cached --quiet; then
+            echo "Diagrams are up to date"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: render architecture diagrams [skip ci]"
+          git push

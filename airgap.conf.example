@@ -1,0 +1,41 @@
+# Example configuration for ubuntu-airgap.sh
+#
+#   ./ubuntu-airgap.sh download --config airgap.conf
+#
+# This file is sourced by bash. Command-line options override the values here,
+# and --repo / --ppa / --repo-deb on the command line are added to the lists.
+
+# Where the mirror is written (e.g. an external disk)
+DEST="/media/$USER/AIRGAP/mirror"
+
+# Ubuntu release and what to mirror
+RELEASE="resolute"                                   # Ubuntu 26.04 LTS
+SUITES="resolute,resolute-updates,resolute-security" # add resolute-backports if wanted
+COMPONENTS="main,restricted,universe,multiverse"     # "main,restricted" is ~40% of the size
+
+# 1 = also mirror the amd64v3 (x86-64-v3) optimised builds.
+# Airgapped clients with a capable CPU then use them automatically.
+AMD64V3=0
+
+# 1 = also mirror Contents-* files (only needed for apt-file)
+CONTENTS=0
+
+# Upstream Ubuntu mirror (pick one close to you, e.g. http://se.archive.ubuntu.com/ubuntu)
+# UBUNTU_METHOD="http"; UBUNTU_HOST="archive.ubuntu.com"; UBUNTU_ROOT="ubuntu"
+
+# Extra repositories: "name=...;url=...;suites=...;components=...;key=URL-or-file"
+REPOS=(
+  # "name=docker;url=https://download.docker.com/linux/ubuntu;suites=resolute;components=stable;key=https://download.docker.com/linux/ubuntu/gpg"
+)
+
+# Launchpad PPAs (like "add-apt-repository ppa:OWNER/NAME")
+PPAS=(
+  # "git-core/ppa"
+)
+
+# Vendor "repo setup" packages: a .deb that would normally add apt sources + keys.
+# The script unpacks it (does not install it) and mirrors the repositories inside.
+REPO_DEBS=(
+  # "https://example.com/downloads/vendor-repo-setup_1.0_all.deb"
+  # "/path/to/vendor-repo-setup_1.0_all.deb"
+)

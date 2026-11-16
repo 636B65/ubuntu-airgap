@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  schedule:
+    # Weekly run catches upstream changes (Ubuntu archive, debmirror, apt)
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck
+        run: shellcheck -x ubuntu-airgap.sh tests/*.sh
+
+      - name: Bash syntax
+        run: |
+          for f in ubuntu-airgap.sh tests/*.sh airgap.conf.example; do bash -n "$f"; done
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python linters
+        run: pip install ruff codespell
+
+      - name: Ruff (embedded Python helper + tests)
+        run: |
+          tests/extract-helper.sh tests/.airgap_helper_lint.py
+          ruff check --output-format github tests/
+
+      - name: Codespell
+        run: codespell
+
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+      - name: Markdown lint
+        run: npx --yes markdownlint-cli2 "**/*.md"
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: CLI tests
+        run: tests/test_cli.sh
+      - name: Python helper tests
+        run: python3 -W error -m unittest discover -s tests -v
+
+  e2e:
+    name: End-to-end (${{ matrix.variant }})
+    needs: [lint, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [amd64, amd64v3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show CPU level
+        run: |
+          grep -m1 'model name' /proc/cpuinfo
+          for f in avx2 bmi2 fma; do grep -qw "$f" /proc/cpuinfo && echo "$f: yes" || echo "$f: no"; done
+      - name: Partial mirror + offline upgrade
+        env:
+          AMD64V3: ${{ matrix.variant == 'amd64v3' && '1' || '0' }}
+          WORK: ${{ runner.temp }}/e2e
+        run: tests/e2e.sh
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ matrix.variant }}
+          path: |
+            ${{ runner.temp }}/e2e/*.log
+            ${{ runner.temp }}/e2e/mirror/airgap-mirror.conf
+          if-no-files-found: ignore

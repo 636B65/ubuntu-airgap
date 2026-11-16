@@ -1,0 +1,6 @@
+config:
+  MD013: false          # long lines (tables, commands)
+  MD033: false
+  MD060: false          # table column style
+ignores:
+  - node_modules/**
