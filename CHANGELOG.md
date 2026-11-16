@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-17
+
+### Security
+
+- The HTTP server log no longer falls back to the predictable path
+  `/tmp/ubuntu-airgap-http.log`, which a local user could pre-create as a
+  symlink and make root truncate a file. It now uses `mktemp`, and only uses
+  `/var/log` when that path is not a symlink.
+- A warning is printed when a repository key is downloaded over plain `http://`.
+- GitHub Actions are pinned to commit SHAs, checkouts no longer keep the token
+  on disk, and write permission is granted per job.
+- Added zizmor (workflow security) to CI, plus CodeQL and OpenSSF Scorecard code
+  scanning, `SECURITY.md` with the trust model, and private vulnerability
+  reporting.
+
+### Fixed
+
+- A failed `debmirror` run is retried (up to 3 attempts). This covers the Ubuntu
+  archive republishing during a download.
+- The end-to-end test accepts either `InRelease` or `Release` + `Release.gpg`,
+  as apt does.
+- The release badge now links to the latest release.
+
+### Changed
+
+- GitHub Actions updated to their current major versions (checkout v7,
+  setup-python v7, upload-artifact v7), and CI uses Python 3.14 with pinned tool
+  versions. Dependabot updates for actions are grouped into one PR.
+
 ## [0.1.0] - 2026-11-16
 
 ### Added
@@ -32,5 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: ShellCheck, ruff, codespell, actionlint, markdownlint, unit tests, and an
   offline end-to-end test (amd64 and amd64v3). There is also a release workflow.
 
-[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/636B65/ubuntu-airgap/releases/tag/v0.1.0

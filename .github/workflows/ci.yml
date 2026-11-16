@@ -17,12 +17,22 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Pinned tool versions (bump together with the actions below)
+  RUFF_VERSION: "0.17.5"
+  CODESPELL_VERSION: "2.4.3"
+  ZIZMOR_VERSION: "1.32.0"
+  MARKDOWNLINT_VERSION: "0.24.1"
+  ACTIONLINT_IMAGE: "rhysd/actionlint:1.7.12"
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: ShellCheck
         run: shellcheck -x ubuntu-airgap.sh tests/*.sh
@@ -31,12 +41,12 @@ jobs:
         run: |
           for f in ubuntu-airgap.sh tests/*.sh airgap.conf.example; do bash -n "$f"; done
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install Python linters
-        run: pip install ruff codespell
+        run: pip install "ruff==${RUFF_VERSION}" "codespell==${CODESPELL_VERSION}"
 
       - name: Ruff (embedded Python helper + tests)
         run: |
@@ -47,21 +57,48 @@ jobs:
         run: codespell
 
       - name: actionlint
-        run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -color
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$ACTIONLINT_IMAGE" -color
 
       - name: Markdown lint
-        run: npx --yes markdownlint-cli2 "**/*.md"
+        run: npx --yes "markdownlint-cli2@${MARKDOWNLINT_VERSION}" "**/*.md"
+
+  zizmor:
+    name: Workflow security (zizmor)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # upload SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Run zizmor
+        run: |
+          pip install "zizmor==${ZIZMOR_VERSION}"
+          zizmor --format plain .github/workflows/
+          zizmor --format sarif .github/workflows/ > zizmor.sarif || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Upload SARIF
+        if: always() && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
 
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          python-version: "3.13"
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
       - name: CLI tests
         run: tests/test_cli.sh
       - name: Python helper tests
@@ -77,7 +114,9 @@ jobs:
       matrix:
         variant: [amd64, amd64v3]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Show CPU level
         run: |
           grep -m1 'model name' /proc/cpuinfo
@@ -89,7 +128,7 @@ jobs:
         run: tests/e2e.sh
       - name: Upload logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-logs-${{ matrix.variant }}
           path: |

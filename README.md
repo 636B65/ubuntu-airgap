@@ -1,7 +1,8 @@
 # ubuntu-airgap
 
 [![CI](https://github.com/636B65/ubuntu-airgap/actions/workflows/ci.yml/badge.svg)](https://github.com/636B65/ubuntu-airgap/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/636B65/ubuntu-airgap?sort=semver)](https://github.com/636B65/ubuntu-airgap/releases)
+[![Release](https://img.shields.io/github/v/release/636B65/ubuntu-airgap?sort=semver&display_name=tag&cacheSeconds=3600)](https://github.com/636B65/ubuntu-airgap/releases/latest)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/636B65/ubuntu-airgap/badge)](https://scorecard.dev/viewer/?uri=github.com/636B65/ubuntu-airgap)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Keep an **air-gapped Ubuntu 26.04 LTS** ("resolute") machine up to date with a
@@ -198,6 +199,11 @@ from the same mirror.
   match the one Launchpad reports for that PPA.
 - The download container runs as your user, not root, so the files on the disk
   belong to you.
+- **The disk is trusted** for the script itself, which runs as root, and for the
+  keys of extra repositories, which are installed from the disk. Ubuntu packages
+  do not depend on this, because they are checked against the keyring already on
+  the machine. See [SECURITY.md](SECURITY.md) for the full trust model and how to
+  report a vulnerability.
 
 ## Not covered
 
@@ -231,9 +237,11 @@ What has been verified so far:
   mirrors on exFAT/NTFS disks. Hard links fall back to copies there, which is
   implemented but not tested.
 
-CI runs ShellCheck, ruff, codespell, actionlint, markdownlint, the unit tests and
-the end-to-end test (amd64 and amd64v3) on every push, and once a week to catch
-upstream changes.
+CI runs ShellCheck, ruff, codespell, actionlint, markdownlint, zizmor (workflow
+security), the unit tests and the end-to-end test (amd64 and amd64v3) on every
+push, and once a week to catch upstream changes. CodeQL, OpenSSF Scorecard,
+Dependabot and secret scanning report to the repository's Security tab. All
+actions are pinned to commit SHAs.
 
 ### CI workflows
 

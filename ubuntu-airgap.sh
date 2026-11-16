@@ -16,7 +16,7 @@
 set -Eeuo pipefail
 trap 'printf "ERROR: unexpected failure at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 SCRIPT_NAME="ubuntu-airgap.sh"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SELF_DIR="$(dirname "$SELF")"
@@ -339,7 +339,16 @@ run_debmirror() {  # target method host root dists sections keyring arches
   fi
   mkdir -p "$(dirname "$target")"
   log "debmirror $method://$host/$root  dists=$dists  sections=$sections  arch=$arches"
-  debmirror "${a[@]}" "$target"
+  # The archive republishes every ~30 min; a publish during the download makes
+  # index checksums mismatch. A retry fetches the new, consistent set.
+  local try
+  for try in 1 2 3; do
+    if debmirror "${a[@]}" "$target"; then return 0; fi
+    [[ $try -lt 3 ]] || break
+    warn "debmirror failed (attempt $try/3), retrying in 60s..."
+    sleep 60
+  done
+  die "debmirror failed for $method://$host/$root"
 }
 
 # Recreate dists/**/by-hash/SHA256/<hash> entries listed in Release files, like
@@ -622,6 +631,9 @@ cmd_container() {
     host="${rest%%/*}"; root="${rest#*/}"; [[ "$root" == "$rest" ]] && root=""
     key="$m/keys/$R_NAME.gpg"
     log "Fetching signing key for '$R_NAME'"
+    if [[ "$R_KEY" =~ ^http:// ]]; then
+      warn "key for '$R_NAME' is downloaded over plain http - prefer an https:// key URL"
+    fi
     if [[ "$R_KEY" =~ ^https?:// ]]; then curl -fsSL "$R_KEY" -o /tmp/key.in || die "cannot download key $R_KEY"
     else cp "$R_KEY" /tmp/key.in; fi
     if grep -q -- "-----BEGIN PGP" /tmp/key.in; then gpg --batch --yes --dearmor -o "$key" /tmp/key.in
@@ -668,8 +680,11 @@ start_server() {
      && runuser -u "$SUDO_USER" -- test -r "$MIRROR_DIR/$MANIFEST_NAME" 2>/dev/null; then
     runas=(runuser -u "$SUDO_USER" --)
   fi
+  # Never write to a predictable /tmp path (symlink attacks): fall back to mktemp
+  if ! { [[ $EUID -eq 0 && ! -L "$SERVER_LOG" ]] && : >"$SERVER_LOG"; } 2>/dev/null; then
+    SERVER_LOG="$(mktemp -t ubuntu-airgap-http.XXXXXX.log)"
+  fi
   log "Serving $MIRROR_DIR on http://$BIND:$PORT/ (log: $SERVER_LOG)"
-  : >"$SERVER_LOG" 2>/dev/null || SERVER_LOG="/tmp/ubuntu-airgap-http.log"
   "${runas[@]}" python3 -m http.server "$PORT" --bind "$BIND" --directory "$MIRROR_DIR" \
       >>"$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
@@ -870,7 +885,6 @@ cmd_install() {
 
 cmd_serve() {
   find_mirror
-  [[ $EUID -eq 0 ]] || SERVER_LOG="/tmp/ubuntu-airgap-http.log"
   start_server
   log "Serving until Ctrl-C. apt on this machine uses $SOURCES_FILE."
   if [[ "$BIND" != 127.0.0.1 ]]; then log "Other machines: URIs: http://<this-host-ip>:$PORT/ubuntu/  (see $MANIFEST_NAME for extra repos)"; fi

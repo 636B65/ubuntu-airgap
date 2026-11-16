@@ -8,7 +8,7 @@
           <mxGeometry x="20" y="10" width="900" height="30" as="geometry" />
         </mxCell>
         <mxCell id="n2" value="Triggers" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
-          <mxGeometry x="20" y="60" width="220" height="580" as="geometry" />
+          <mxGeometry x="20" y="60" width="220" height="710" as="geometry" />
         </mxCell>
         <mxCell id="n3" value="push to main&lt;br&gt;pull request" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
           <mxGeometry x="15" y="45" width="190" height="50" as="geometry" />
@@ -22,13 +22,13 @@
         <mxCell id="n6" value="change to&lt;br&gt;docs/diagrams/*.drawio" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
           <mxGeometry x="15" y="500" width="190" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="n7" value="dependabot&lt;br&gt;(weekly action updates)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+        <mxCell id="n7" value="dependabot&lt;br&gt;(grouped weekly PR)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
           <mxGeometry x="15" y="220" width="190" height="50" as="geometry" />
         </mxCell>
         <mxCell id="n8" value="ci.yml" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
           <mxGeometry x="280" y="60" width="900" height="290" as="geometry" />
         </mxCell>
-        <mxCell id="n9" value="&lt;b&gt;lint&lt;/b&gt;&lt;br&gt;ShellCheck &amp;middot; bash -n&lt;br&gt;ruff (embedded Python)&lt;br&gt;codespell &amp;middot; actionlint&lt;br&gt;markdownlint" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n8">
+        <mxCell id="n9" value="&lt;b&gt;lint&lt;/b&gt; + &lt;b&gt;zizmor&lt;/b&gt;&lt;br&gt;ShellCheck &amp;middot; bash -n&lt;br&gt;ruff (embedded Python)&lt;br&gt;codespell &amp;middot; actionlint&lt;br&gt;markdownlint &amp;middot; workflow security" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n8">
           <mxGeometry x="15" y="45" width="200" height="120" as="geometry" />
         </mxCell>
         <mxCell id="n10" value="&lt;b&gt;unit&lt;/b&gt;&lt;br&gt;tests/test_cli.sh&lt;br&gt;python unittest&lt;br&gt;(sources parsers)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n8">
@@ -109,19 +109,49 @@
         <mxCell id="e35" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="n32" target="n33">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e36" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n3" target="n8">
+        <mxCell id="n36" value="Security (scorecard.yml + repository settings)" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="280" y="660" width="900" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="n37" value="&lt;b&gt;OpenSSF Scorecard&lt;/b&gt;&lt;br&gt;pinning, permissions, &amp;hellip;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="n36">
+          <mxGeometry x="15" y="40" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n38" value="&lt;b&gt;CodeQL&lt;/b&gt; (actions, python)&lt;br&gt;zizmor SARIF" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="n36">
+          <mxGeometry x="235" y="40" width="200" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n39" value="&lt;b&gt;Dependabot&lt;/b&gt; alerts + updates&lt;br&gt;&lt;b&gt;secret scanning&lt;/b&gt;, push protection" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="n36">
+          <mxGeometry x="455" y="40" width="230" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="n40" value="&lt;b&gt;Security tab&lt;/b&gt;&lt;br&gt;+ private vuln. reports" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="n36">
+          <mxGeometry x="715" y="40" width="170" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="e41" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n37" target="n38">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e37" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n4" target="n8">
+        <mxCell id="e42" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n38" target="n39">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e38" value="also runs CI" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;dashed=1;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n8">
+        <mxCell id="e43" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n39" target="n40">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e39" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n22">
+        <mxCell id="n44" value="weekly + push to main" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="n2">
+          <mxGeometry x="15" y="640" width="190" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e45" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n44" target="n36">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e40" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n6" target="n30">
+        <mxCell id="e46" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n3" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e47" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="n4" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e48" value="also runs CI" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;dashed=1;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e49" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n5" target="n22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e50" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;endFill=1;strokeWidth=2;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="n6" target="n30">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>

@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: diagrams-${{ github.ref }}
@@ -23,8 +23,12 @@ jobs:
   render:
     name: drawio → png
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # commit the rendered PNGs back to main
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Export with draw.io
         run: |
@@ -36,7 +40,7 @@ jobs:
 
       - name: Upload PNGs (pull requests)
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: diagrams
           path: docs/diagrams/*.png
@@ -51,4 +55,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "docs: render architecture diagrams [skip ci]"
-          git push
+          # credentials are not persisted by checkout; pass the token only here
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            push origin "HEAD:${GITHUB_REF_NAME}"
+        env:
+          GH_TOKEN: ${{ github.token }}

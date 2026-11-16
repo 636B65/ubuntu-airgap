@@ -84,9 +84,15 @@ grep -E '^==>|Files to download' "$WORK/download.log"
 step "Check mirror layout"
 M="$WORK/mirror"
 for f in airgap-mirror.conf ubuntu-airgap.sh keys/ubuntu-archive-keyring.gpg \
-         ubuntu/dists/resolute/InRelease ubuntu/dists/resolute-updates/InRelease ubuntu/dists/resolute-security/InRelease \
          prefs/e2e-repo-setup-e2e-vendor-pin setup-debs/e2e-repo-setup_1.0_all.deb; do
   [[ -e "$M/$f" ]] || fail "missing $f"
+done
+# every suite must be signed: InRelease, or Release + Release.gpg (debmirror
+# needs only one of the two, and apt accepts either)
+for s in resolute resolute-updates resolute-security; do
+  d="$M/ubuntu/dists/$s"
+  [[ -f "$d/Release" ]] || fail "missing $d/Release"
+  [[ -f "$d/InRelease" || -f "$d/Release.gpg" ]] || fail "no signature for $s"
 done
 grep -q '^repo|ppa-git-core-ppa|repos/ppa-git-core-ppa|resolute|main|' "$M/airgap-mirror.conf" || fail "PPA not in manifest"
 grep -q '^repo|e2e-repo-setup-1|repos/e2e-repo-setup-1|resolute|stable|' "$M/airgap-mirror.conf" || fail "setup-deb repo not in manifest"
