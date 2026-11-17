@@ -21,7 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or a PPA (HTTP 503) no longer fails the download.
 - Every other download is retried during outages too: repository and key
   downloads (curl, up to 15 minutes with backoff), and Launchpad and keyserver
-  lookups for `--ppa` (like the Snap Store API). A repository is only reported
+  lookups for `--ppa` (like the Snap Store API). These lookups now retry for
+  about 10 minutes instead of about 2.5, honouring `Retry-After` up to 5
+  minutes, because the Snap Store can rate-limit for several minutes. A repository is only reported
   as "not found (flat repos are not supported)" on a real HTTP 404; an outage is
   now reported as "cannot reach ... (HTTP 503)".
 - `--snap`: `snap download` is retried (5 attempts, 10 to 80 s apart) when the

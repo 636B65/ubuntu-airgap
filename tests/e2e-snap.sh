@@ -36,7 +36,8 @@ done <"$M/airgap-mirror.conf"
 
 step "Second download is incremental"
 "$root/ubuntu-airgap.sh" download -d "$WORK/mirror" --suites resolute-security --components main \
-  --package-filter '^$' --snap "$SNAP" >"$WORK/download2.log" 2>&1 || fail "second download failed"
+  --package-filter '^$' --snap "$SNAP" >"$WORK/download2.log" 2>&1 \
+  || { tail -40 "$WORK/download2.log"; fail "second download failed"; }
 grep -q "already downloaded" "$WORK/download2.log" || fail "snaps were downloaded again"
 
 step "Start systemd + snapd container"

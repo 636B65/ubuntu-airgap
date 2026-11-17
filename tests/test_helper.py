@@ -163,7 +163,7 @@ class StoreGet(unittest.TestCase):
     def test_gives_up_after_tries(self):
         res, calls, sleeps = self.run_with([self.http(429, "999")] * 3, tries=3)
         self.assertEqual(res.code, 429)
-        self.assertEqual((len(calls), sleeps), (3, [120, 120]))
+        self.assertEqual((len(calls), sleeps), (3, [300, 300]))
 
 
 if __name__ == "__main__":

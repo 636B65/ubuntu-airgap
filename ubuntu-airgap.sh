@@ -455,10 +455,11 @@ def die(msg):
     print("ERROR: " + msg, file=sys.stderr)
     sys.exit(1)
 
-def http_get(req, tries=6, sleep=time.sleep):
+def http_get(req, tries=8, sleep=time.sleep):
     """GET, retrying rate limits (429), server errors (5xx) and network errors.
 
-    Honours Retry-After (capped at 120 s), else backs off 5, 10, 20, 40, 80 s.
+    Honours Retry-After (capped at 300 s), else backs off 5, 10, 20 ... 300 s
+    (about 10 minutes in all: the Snap Store can rate-limit for minutes).
     Other HTTP errors (404, ...) are raised at once.
     """
     for attempt in range(1, tries + 1):
@@ -474,7 +475,7 @@ def http_get(req, tries=6, sleep=time.sleep):
         if attempt == tries:
             raise err
         delay = int(after) if after and after.isdigit() else 5 * 2 ** (attempt - 1)
-        delay = min(delay, 120)
+        delay = min(delay, 300)
         url = req.full_url if hasattr(req, "full_url") else req
         print(f"WARNING: {url}: {err}; retrying in {delay}s ({attempt}/{tries - 1})",
               file=sys.stderr)
@@ -637,7 +638,7 @@ def snap_channel(info, channel):
     die(f"snap {info['name']}: no amd64 release in channel {track}/{risk}")
 
 
-def store_get(req, tries=6, sleep=time.sleep):
+def store_get(req, tries=8, sleep=time.sleep):
     """GET JSON from the Snap Store (retried like http_get)."""
     return json.loads(http_get(req, tries, sleep))
 
