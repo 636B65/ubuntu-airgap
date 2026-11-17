@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Release files get a signed build provenance attestation (Sigstore, through
+  GitHub artifact attestations). Verify with
+  `gh attestation verify ubuntu-airgap.sh --repo 636B65/ubuntu-airgap`.
+- `tests/lint.sh` runs every lint check CI runs, the same way. The CI Lint job
+  now runs this script, so local and CI checks cannot drift apart.
+
+### Fixed
+
+- `--snap`: `snap download` is retried (5 attempts, 10 to 80 s apart) when the
+  Snap Store rate-limits or fails, like the Snap Store API queries already were.
+- CI no longer cancels a run on `main` (or a tag) when a newer push arrives, so
+  an automatic release cannot be interrupted halfway.
+
 ## [0.2.1] - 2026-11-17
 
 ### Changed

@@ -246,6 +246,9 @@ on the air-gapped machine:
   Canonical's signed assertions, so a modified `.snap` is rejected.
 - The download container runs as your user, not root, so the files on the disk
   belong to you.
+- Release files carry signed build provenance from this repository's release
+  workflow. Check a downloaded script before copying it to the disk:
+  `gh attestation verify ubuntu-airgap.sh --repo 636B65/ubuntu-airgap`.
 - **The disk is trusted** for the script itself, which runs as root, and for the
   keys of extra repositories, which are installed from the disk. Ubuntu packages
   do not depend on this, because they are checked against the keyring already on
@@ -261,12 +264,17 @@ on the air-gapped machine:
 ## Development
 
 ```bash
+tests/lint.sh                                       # every lint check CI runs
 tests/test_cli.sh                                   # fast CLI tests
 python3 -m unittest discover -s tests -v            # embedded Python helper
 tests/e2e.sh                                        # full offline test (Docker, ~300 MB download)
 AMD64V3=1 tests/e2e.sh                              # same, with the amd64v3 variant
 tests/e2e-snap.sh                                   # --snap + offline install (privileged docker)
 ```
+
+`tests/lint.sh` runs ShellCheck, `bash -n`, ruff, codespell, actionlint,
+markdownlint and zizmor exactly as CI does (the CI Lint job runs the same script).
+To run it before every push: `ln -s ../../tests/lint.sh .git/hooks/pre-push`.
 
 The end-to-end test builds a *partial* mirror with `--package-filter`: every index
 is real and signed, but only the `.deb` files the test needs are downloaded. It
@@ -311,7 +319,7 @@ When CI passes on `main` and the tag `vx.y.z` does not exist yet, CI tags that
 commit and publishes the release. Pushing the tag yourself
 (`git tag vx.y.z && git push --tags`) also works. Either way the release workflow
 checks that the tag, the script and the changelog all agree, then publishes the
-script with its SHA256 sums.
+script with its SHA256 sums and a signed build provenance attestation.
 
 ## License
 

@@ -14,13 +14,23 @@ jobs:
     name: Publish GitHub release
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # create the release
+      contents: write       # create the release
+      id-token: write       # sign the build provenance attestation
+      attestations: write   # store it
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Check, test and publish
+      - name: Check, test and build
+        run: .github/release.sh build "$GITHUB_REF_NAME"
+
+      - name: Attest build provenance (Sigstore-signed)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/assets/*
+
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: .github/release.sh "$GITHUB_REF_NAME"
+        run: .github/release.sh publish "$GITHUB_REF_NAME"

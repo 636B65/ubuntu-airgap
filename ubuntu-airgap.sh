@@ -719,6 +719,20 @@ expand_extras() {
   done
 }
 
+# "snap download NAME" into DIR, retrying failures (the Snap Store rate-limits
+# and has transient errors): up to 5 attempts, 10/20/40/80 s apart.
+snap_download() {  # name channel dir
+  local name="$1" ch="$2" dir="$3" try
+  for try in 1 2 3 4 5; do
+    rm -rf "${dir:?}"/* 2>/dev/null || true
+    if (cd "$dir" && snap download "$name" --channel="$ch" >/dev/null); then return 0; fi
+    [[ $try -lt 5 ]] || break
+    warn "snap download $name failed (attempt $try/5), retrying in $((10 * 2 ** (try - 1)))s..."
+    sleep $((10 * 2 ** (try - 1)))
+  done
+  return 1
+}
+
 # Download snaps (+ dependencies) with "snap download" (works without snapd
 # running). Each .snap comes with a .assert file holding its signed assertions.
 fetch_snaps() {
@@ -737,7 +751,7 @@ fetch_snaps() {
     else
       log "  snap $name $ch r$rev ($type, $conf) - downloading"
       tmpd="$(mktemp -d "$dir/.dl.XXXXXX")"
-      (cd "$tmpd" && snap download "$name" --channel="$ch" >/dev/null) || die "snap download $name failed"
+      snap_download "$name" "$ch" "$tmpd" || die "snap download $name failed"
       f="$(find "$tmpd" -name "${name}_*.snap" -print -quit)"
       [[ -n "$f" && -f "${f%.snap}.assert" ]] || die "snap download $name produced no .snap/.assert"
       rev="$(basename "$f" .snap)"; rev="${rev##*_}"      # store may have moved on

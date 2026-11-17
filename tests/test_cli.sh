@@ -103,6 +103,30 @@ expect "empty pocket, no .debs: first try"     0 ""                           --
 mkdir -p "$tmp/dm/full"
 expect "no filter: empty result stays fatal"   nonzero "unexpected retry"     -- dm_run "$tmp/dm/full" ''
 
+# snap_download retries a failing "snap download" (Snap Store rate limits)
+mkdir -p "$tmp/sd/bin" "$tmp/sd/out"
+cat >"$tmp/sd/bin/snap" <<'STUB'
+#!/usr/bin/env bash
+n="$(cat "$SD_COUNT" 2>/dev/null || echo 0)"; echo $((n + 1)) >"$SD_COUNT"
+[[ $n -ge $SD_FAILS ]] || { touch partial.tmp; echo "error: too many requests" >&2; exit 1; }
+touch "${2}_42.snap" "${2}_42.assert"
+STUB
+chmod +x "$tmp/sd/bin/snap"
+sd_fn="$(sed -n '/^snap_download() {/,/^}/p' "$S")"
+sd_run() {  # FAILS: run snap_download; prints sleeps, then the files left behind
+  rm -f "$tmp/sd/count" "$tmp/sd/out"/*
+  PATH="$tmp/sd/bin:$PATH" SD_COUNT="$tmp/sd/count" SD_FAILS="$1" bash -c 'set -Eeuo pipefail
+    warn() { :; }; sleep() { echo "sleep $1"; }
+    eval "$1"; snap_download hello latest/stable "$2"; ls "$2"' _ "$sd_fn" "$tmp/sd/out"
+}
+expect "snap download: retried until it works" 0 "^sleep 20$"            -- sd_run 2
+if [[ "$(sd_run 2 2>/dev/null | tr '\n' ' ')" == "sleep 10 sleep 20 hello_42.assert hello_42.snap " ]]; then
+  ok "snap download: partial files cleaned between attempts"
+else
+  bad "snap download: partial files cleaned between attempts" "$(sd_run 2 | tr '\n' ' ')"
+fi
+expect "snap download: gives up after 5 tries" 1 "sleep 80"               -- sd_run 9
+
 # The airgap.conf.example must be valid bash
 expect "example config parses"  0 ""                        -- bash -n "$root/airgap.conf.example"
 

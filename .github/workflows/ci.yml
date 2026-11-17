@@ -15,7 +15,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel main or tag runs: a run on main may be publishing a release
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   # Pinned tool versions. Python tools are hash-locked in
@@ -32,13 +33,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: ShellCheck
-        run: shellcheck -x ubuntu-airgap.sh tests/*.sh .github/*.sh
-
-      - name: Bash syntax
-        run: |
-          for f in ubuntu-airgap.sh tests/*.sh airgap.conf.example; do bash -n "$f"; done
-
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
@@ -46,19 +40,10 @@ jobs:
       - name: Install Python linters
         run: pip install --require-hashes --no-deps -r .github/requirements/lint.txt
 
-      - name: Ruff (embedded Python helper + tests)
-        run: |
-          tests/extract-helper.sh tests/.airgap_helper_lint.py
-          ruff check --output-format github tests/
-
-      - name: Codespell
-        run: codespell
-
-      - name: actionlint
-        run: docker run --rm -v "$PWD:/repo" -w /repo "$ACTIONLINT_IMAGE" -color
-
-      - name: Markdown lint
-        run: npx --yes "markdownlint-cli2@${MARKDOWNLINT_VERSION}" "**/*.md"
+      # ShellCheck, bash -n, ruff, codespell, actionlint, markdownlint: the same
+      # script developers run locally (zizmor has its own job below)
+      - name: Lint
+        run: tests/lint.sh
 
   zizmor:
     name: Workflow security (zizmor)
@@ -165,12 +150,15 @@ jobs:
     needs: [lint, zizmor, unit, e2e, e2e-snap]
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # create the tag and the release
+      contents: write       # create the tag and the release
+      id-token: write       # sign the build provenance attestation
+      attestations: write   # store it
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Release when the VERSION tag does not exist yet
+      - name: Is VERSION new?
+        id: v
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -178,5 +166,22 @@ jobs:
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
             echo "$tag already exists: nothing to release"
           else
-            .github/release.sh "$tag"
+            echo "$tag is new: releasing"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
           fi
+      - name: Check, test and build
+        if: steps.v.outputs.tag != ''
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+        run: .github/release.sh build "$TAG"
+      - name: Attest build provenance (Sigstore-signed)
+        if: steps.v.outputs.tag != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/assets/*
+      - name: Publish
+        if: steps.v.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: .github/release.sh publish "$TAG"
