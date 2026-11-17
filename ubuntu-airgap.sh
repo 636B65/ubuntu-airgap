@@ -1005,7 +1005,7 @@ report_kept_back() {
 # Release + Release.gpg pair when an upstream InRelease could not be fetched).
 missing_on_mirror() {  # server-log mirror-dir
   local path
-  grep '" 404 ' "$1" 2>/dev/null | sed -E 's/.*"GET ([^ ?]+)[^ ]* .*/\1/' | sort -u \
+  { grep '" 404 ' "$1" 2>/dev/null || true; } | sed -E 's/.*"GET ([^ ?]+)[^ ]* .*/\1/' | sort -u \
     | while IFS= read -r path; do
         [[ "$path" == */dists/*/InRelease && -s "$2${path%InRelease}Release.gpg" ]] && continue
         printf '%s\n' "$path"

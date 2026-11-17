@@ -196,6 +196,10 @@ if [[ "$got" == "/repos/x/dists/resolute/InRelease /ubuntu/pool/main/h/hello/hel
 else
   bad "404 report skips InRelease when Release.gpg exists" "got: $got"
 fi
+# A clean log (no 404s at all, the normal case) must not be an error
+grep -v '" 404 ' "$tmp/mm.log" >"$tmp/mm-clean.log"
+expect "404 report: clean log is not an error" 0 "^$" -- "$S" _missing -m "$tmp/mm" <"$tmp/mm-clean.log"
+expect "404 report: empty log is not an error" 0 "^$" -- "$S" _missing -m "$tmp/mm" </dev/null
 
 # The airgap.conf.example must be valid bash
 expect "example config parses"  0 ""                        -- bash -n "$root/airgap.conf.example"
