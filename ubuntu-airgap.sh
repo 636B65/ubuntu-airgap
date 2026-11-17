@@ -355,10 +355,11 @@ run_debmirror() {  # target method host root dists sections keyring arches
   mkdir -p "$(dirname "$target")"
   log "debmirror $method://$host/$root  dists=$dists  sections=$sections  arch=$arches"
   # The archive republishes every ~30 min; a publish during the download makes
-  # index checksums mismatch. A retry fetches the new, consistent set.
-  local try out
+  # index checksums mismatch. A retry fetches the new, consistent set. Servers
+  # also have short outages (503s): 5 attempts, 1/2/4/8 min apart (~15 min).
+  local try out delay
   out="$(mktemp)"
-  for try in 1 2 3; do
+  for try in 1 2 3 4 5; do
     if [[ -n "$PACKAGE_FILTER" && -d "$target" ]] && [[ -z "$(find "$target" -name '*.deb' -print -quit)" ]]; then
       rm -rf "$target"
     fi
@@ -372,9 +373,10 @@ run_debmirror() {  # target method host root dists sections keyring arches
       rm -rf "$target"
       if debmirror "${a[@]}" "$target" 2>&1 | tee "$out"; then rm -f "$out"; return 0; fi
     fi
-    [[ $try -lt 3 ]] || break
-    warn "debmirror failed (attempt $try/3), retrying in 60s..."
-    sleep 60
+    [[ $try -lt 5 ]] || break
+    delay=$((60 * 2 ** (try - 1)))
+    warn "debmirror failed (attempt $try/5), retrying in $((delay / 60)) min..."
+    sleep "$delay"
   done
   rm -f "$out"
   die "debmirror failed for $method://$host/$root"

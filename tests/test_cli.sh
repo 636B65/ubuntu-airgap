@@ -103,6 +103,26 @@ expect "empty pocket, no .debs: first try"     0 ""                           --
 mkdir -p "$tmp/dm/full"
 expect "no filter: empty result stays fatal"   nonzero "unexpected retry"     -- dm_run "$tmp/dm/full" ''
 
+# run_debmirror retries server outages: 5 attempts, 1/2/4/8 min apart
+cat >"$tmp/dm/bin/debmirror-flaky" <<'STUB'
+#!/usr/bin/env bash
+n="$(cat "$DM_COUNT" 2>/dev/null || echo 0)"; echo $((n + 1)) >"$DM_COUNT"
+[[ $n -ge $DM_FAILS ]] || { echo "Download of dists/resolute/Release failed: 503 Service Unavailable"; exit 1; }
+mkdir -p "${!#}/dists"; echo "All done."
+STUB
+chmod +x "$tmp/dm/bin/debmirror-flaky"
+dm_flaky() {  # FAILS: prints the sleeps and whether it gave up, one line
+  rm -rf "$tmp/dm/count" "$tmp/dm/flaky" "$tmp/dm/events"
+  mkdir -p "$tmp/dm/fbin"; ln -sf "$tmp/dm/bin/debmirror-flaky" "$tmp/dm/fbin/debmirror"
+  PATH="$tmp/dm/fbin:$PATH" DM_COUNT="$tmp/dm/count" DM_FAILS="$1" EV="$tmp/dm/events" bash -c 'set -Eeuo pipefail
+    log() { :; }; warn() { :; }; die() { echo "gave-up" >>"$EV"; exit 1; }; sleep() { echo "$1" >>"$EV"; }
+    CONTENTS=0 DRY_RUN=0 PACKAGE_FILTER="" DEBMIRROR_EXTRA=()
+    eval "$1"; run_debmirror "$2" http h r d s /k amd64' _ "$dm_fn" "$tmp/dm/flaky" >/dev/null 2>&1
+  tr '\n' ' ' <"$tmp/dm/events" 2>/dev/null
+}
+expect "debmirror: outage retried with backoff" 0 "^60 120 240 \$"   -- dm_flaky 3
+expect "debmirror: gives up after 5 attempts"  0 "^60 120 240 480 gave-up \$" -- dm_flaky 9
+
 # snap_download retries a failing "snap download" (Snap Store rate limits)
 mkdir -p "$tmp/sd/bin" "$tmp/sd/out"
 cat >"$tmp/sd/bin/snap" <<'STUB'

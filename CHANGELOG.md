@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `debmirror` is retried 5 times, 1, 2, 4 and 8 minutes apart (about 15 minutes
+  in all), instead of 3 times 1 minute apart, so a short outage of the archive
+  or a PPA (HTTP 503) no longer fails the download.
 - `--snap`: `snap download` is retried (5 attempts, 10 to 80 s apart) when the
   Snap Store rate-limits or fails, like the Snap Store API queries already were.
 - CI no longer cancels a run on `main` (or a tag) when a newer push arrives, so
