@@ -75,6 +75,31 @@ fi
 got="$("$S" _classify-sim <<<"$sim" 2>/dev/null)"
 if [[ "$got" == "$want" ]]; then ok "classify apt simulation"; else bad "classify apt simulation" "got: $(tr '\n' ';' <<<"$got")"; fi
 
+# run_debmirror: an empty --package-filter result must not be fatal, even when
+# the pocket directory still holds .debs that no longer match. The stub
+# debmirror refuses an empty result unless the directory is new, like the real one.
+mkdir -p "$tmp/dm/bin" "$tmp/dm/pocket/pool"; touch "$tmp/dm/pocket/pool/old_1.0_amd64.deb"
+cat >"$tmp/dm/bin/debmirror" <<'STUB'
+#!/usr/bin/env bash
+t="${!#}"; [[ -d "$t" ]] && { echo "No packages after parsing Packages and Sources files!"; exit 2; }
+mkdir -p "$t/dists"; echo "All done."
+STUB
+chmod +x "$tmp/dm/bin/debmirror"
+dm_fn="$(sed -n '/^run_debmirror() {/,/^}/p' "$S")"
+dm_run() {  # TARGET: run run_debmirror with the stub; sleep must never be reached
+  PATH="$tmp/dm/bin:$PATH" bash -c 'set -Eeuo pipefail
+    log() { :; }; warn() { echo "WARNING: $*" >&2; }; die() { echo "ERROR: $*" >&2; exit 1; }
+    sleep() { echo "unexpected retry" >&2; exit 3; }
+    CONTENTS=0 DRY_RUN=0 PACKAGE_FILTER="$2" DEBMIRROR_EXTRA=()
+    eval "$1"; run_debmirror "$3" http archive.ubuntu.com ubuntu resolute-security main /k amd64' _ "$dm_fn" "$2" "$1"
+}
+expect "empty pocket, stale .debs: non-fatal"  0 "mirroring index files only" -- dm_run "$tmp/dm/pocket" '^$'
+[[ -d "$tmp/dm/pocket/dists" && ! -e "$tmp/dm/pocket/pool/old_1.0_amd64.deb" ]] \
+  && ok "empty pocket re-mirrored fresh" || bad "empty pocket re-mirrored fresh" "$(find "$tmp/dm/pocket")"
+expect "empty pocket, no .debs: first try"     0 ""                           -- dm_run "$tmp/dm/pocket" '^$'
+mkdir -p "$tmp/dm/full"
+expect "no filter: empty result stays fatal"   nonzero "unexpected retry"     -- dm_run "$tmp/dm/full" ''
+
 # The airgap.conf.example must be valid bash
 expect "example config parses"  0 ""                        -- bash -n "$root/airgap.conf.example"
 

@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- With `--package-filter`, a pocket where nothing matches no longer fails the
+  download ("No packages after parsing Packages and Sources files!"). It is
+  mirrored with index files only and a warning, also when a failed attempt or an
+  earlier run left its directory behind. Previously the `debmirror` retries could
+  never succeed after the first attempt failed.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added

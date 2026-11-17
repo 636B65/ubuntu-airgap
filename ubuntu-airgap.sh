@@ -356,16 +356,27 @@ run_debmirror() {  # target method host root dists sections keyring arches
   log "debmirror $method://$host/$root  dists=$dists  sections=$sections  arch=$arches"
   # The archive republishes every ~30 min; a publish during the download makes
   # index checksums mismatch. A retry fetches the new, consistent set.
-  local try
+  local try out
+  out="$(mktemp)"
   for try in 1 2 3; do
     if [[ -n "$PACKAGE_FILTER" && -d "$target" ]] && [[ -z "$(find "$target" -name '*.deb' -print -quit)" ]]; then
       rm -rf "$target"
     fi
-    if debmirror "${a[@]}" "$target"; then return 0; fi
+    if debmirror "${a[@]}" "$target" 2>&1 | tee "$out"; then rm -f "$out"; return 0; fi
+    # Empty pocket: nothing in it matches --package-filter, but the directory
+    # still holds .debs from an earlier run, so debmirror's anti-nuke check
+    # refuses. Those .debs no longer match the filter (debmirror's cleanup
+    # would delete them anyway), so mirror the pocket into a fresh directory.
+    if [[ -n "$PACKAGE_FILTER" ]] && grep -q '^No packages after parsing' "$out"; then
+      warn "no packages in $dists ($sections) match --package-filter; mirroring index files only"
+      rm -rf "$target"
+      if debmirror "${a[@]}" "$target" 2>&1 | tee "$out"; then rm -f "$out"; return 0; fi
+    fi
     [[ $try -lt 3 ]] || break
     warn "debmirror failed (attempt $try/3), retrying in 60s..."
     sleep 60
   done
+  rm -f "$out"
   die "debmirror failed for $method://$host/$root"
 }
 
