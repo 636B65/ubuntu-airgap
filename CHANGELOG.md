@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
+### Added
+
+- `--snap NAME[=CHANNEL]` downloads snaps (for example `--snap firefox`) with their
+  signed `.assert` files. Bases, content-snap default-providers and `snapd` are
+  resolved automatically through the Snap Store API, and downloads are
+  incremental. `install` (or the new `snaps` command) runs `snap ack` and
+  installs or refreshes the snaps offline in dependency order. `--no-snaps`
+  skips this.
+- Multiarch safety on amd64:
+  - i386 is never mirrored, and `install` warns about installed foreign-arch
+    packages.
+  - Packages that apt keeps back are listed after the upgrade, with the
+    Multi-Arch reason.
+  - `install -y --full-upgrade` refuses to remove i386 packages.
+- End-to-end tests: a client with `libc6:i386` installed, and an offline snap
+  install in a systemd/snapd container whose network is disconnected (new CI job).
+
 ## [0.1.1] - 2026-11-17
 
 ### Security
@@ -64,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: ShellCheck, ruff, codespell, actionlint, markdownlint, unit tests, and an
   offline end-to-end test (amd64 and amd64v3). There is also a release workflow.
 
-[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/636B65/ubuntu-airgap/releases/tag/v0.1.0

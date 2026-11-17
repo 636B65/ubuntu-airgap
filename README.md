@@ -39,8 +39,15 @@ Open it in [draw.io](https://app.diagrams.net/) to edit. CI renders the PNG.</su
   - `--repo-deb URL|FILE`: for vendors who ship a "repo setup" `.deb`. The package
     is unpacked (not installed), and the apt sources, keys and **apt pinning** inside
     it are used.
-- The air-gapped side needs only what Ubuntu Desktop already has: `bash`, `apt` and
-  `python3`.
+- **Snaps** (for example `--snap firefox`): downloaded with their signed
+  assertions. The base snap, content snaps and `snapd` are resolved automatically.
+  They are installed offline as normal signed snaps.
+- **Multiarch-safe:** `Architecture: all` and `Multi-Arch` packages are covered.
+  i386 is never mirrored, and a machine that has i386 packages installed (for
+  example for Wine or Steam) still updates cleanly. Its i386 packages are never
+  removed.
+- The air-gapped side needs only what Ubuntu Desktop already has: `bash`, `apt`,
+  `python3` and (for snaps) `snapd`.
 - Reversible: `restore` puts the original apt sources back.
 
 ## Requirements
@@ -94,6 +101,7 @@ Use `--dry-run` to see the exact number before downloading.
 --repo SPEC               Extra repository (repeatable)
 --ppa OWNER/NAME          Launchpad PPA (repeatable)
 --repo-deb URL|FILE       Repositories from a vendor repo-setup .deb (repeatable)
+--snap NAME[=CHANNEL]     Snap to download, e.g. firefox or firefox=latest/beta (repeatable)
 --package-filter REGEX    Only download .debs whose path matches (tests/partial mirrors)
 --image IMAGE             Docker base image (default: ubuntu:26.04)
 --dry-run                 Fetch indexes only and report the download size
@@ -134,6 +142,26 @@ How `--repo-deb` works:
 Limitations: flat repositories (no `dists/` directory) are not supported, and
 neither are keys that the package downloads at install time.
 
+### Snaps
+
+```bash
+./ubuntu-airgap.sh download -d /media/$USER/AIRGAP/mirror --snap firefox
+./ubuntu-airgap.sh download -d /media/$USER/AIRGAP/mirror --snap firefox=latest/beta --snap vlc
+```
+
+- **Dependencies:** they are resolved through the Snap Store API without
+  downloading anything. That covers the snap's `base` (`core26` for Firefox), the
+  `default-provider`s of its content plugs (`gnome-core26`, `mesa-2604`,
+  `gtk-common-themes`, …) and `snapd` itself. `--snap firefox` downloads 7 snaps.
+- **Download:** `snap download` saves each `.snap` together with a `.assert` file,
+  which holds the store's signed assertions, into `snaps/`. Revisions already on
+  the disk are not downloaded again, and old revisions are removed.
+- **Install:** on the air-gapped machine, `install` (or just `sudo
+  ./ubuntu-airgap.sh snaps`) runs `snap ack` on every `.assert` file. It then
+  installs or refreshes the snaps in dependency order. snapd verifies the
+  signatures, so no `--dangerous` is involved. Snaps already at that revision, or
+  newer, are skipped.
+
 ### Config file
 
 ```bash
@@ -153,7 +181,9 @@ sudo ./ubuntu-airgap.sh install [options]
   --keep-serving            Keep serving after the upgrade (to apt install more)
   --no-phased-all           Respect phased updates (default: take all updates)
   --install-setup-debs      Install the vendor .debs from --repo-deb
+  --no-snaps                Don't install/refresh the snaps from the mirror
 
+sudo ./ubuntu-airgap.sh snaps                         # only install/refresh snaps
 ./ubuntu-airgap.sh serve [--bind 0.0.0.0] [-p PORT]   # serve only (e.g. for apt install)
 sudo ./ubuntu-airgap.sh restore                       # undo everything
 ```
@@ -186,6 +216,21 @@ and `APT::Architecture-Variants "auto"`. apt then uses the v3 builds only when
 `/proc/cpuinfo` shows the CPU supports them. Older CPUs keep using plain amd64
 from the same mirror.
 
+### Multiarch (i386 is skipped)
+
+The mirror is amd64 (plus amd64v3) only. `Architecture: all` and `Multi-Arch:
+foreign/allowed` packages are part of it, and the offline sources list
+`Architectures: amd64`, so apt never asks for i386 indexes. If i386 is enabled
+on the air-gapped machine:
+
+- `install` warns, and says how many i386 packages are installed.
+- `Multi-Arch: same` pairs (for example `libc6` + `libc6:i386`) must have the same
+  version on both architectures. Their amd64 half is therefore **kept back**, and
+  `install` lists those packages after the upgrade.
+- `--full-upgrade` could try to remove i386 packages to upgrade the amd64 half.
+  With `-y` the script refuses that and stops. Without `-y`, apt shows the
+  removal and asks.
+
 ## Security model
 
 - `debmirror` checks the GPG signature of every `Release` file against the
@@ -197,6 +242,8 @@ from the same mirror.
   air-gapped machine may drift and the mirror ages between refreshes.
 - PPA keys are fetched from `keyserver.ubuntu.com`, and their fingerprint must
   match the one Launchpad reports for that PPA.
+- Snaps are installed with `snap ack` and then `snap install`. snapd checks
+  Canonical's signed assertions, so a modified `.snap` is rejected.
 - The download container runs as your user, not root, so the files on the disk
   belong to you.
 - **The disk is trusted** for the script itself, which runs as root, and for the
@@ -207,10 +254,8 @@ from the same mirror.
 
 ## Not covered
 
-- **Snaps** (for example Firefox and the Snap Store) are not apt packages, so they
-  are not updated by this tool.
-- **i386 / multiarch** packages: only amd64 (and optionally amd64v3) is mirrored. If
-  i386 is enabled, `install` prints a warning.
+- **i386 packages** are not mirrored (see [Multiarch](#multiarch-i386-is-skipped)).
+- Snaps are only updated when they are downloaded with `--snap`.
 - Ubuntu Pro / ESM repositories need authentication and are not mirrored.
 
 ## Development
@@ -220,13 +265,17 @@ tests/test_cli.sh                                   # fast CLI tests
 python3 -m unittest discover -s tests -v            # embedded Python helper
 tests/e2e.sh                                        # full offline test (Docker, ~300 MB download)
 AMD64V3=1 tests/e2e.sh                              # same, with the amd64v3 variant
+tests/e2e-snap.sh                                   # --snap + offline install (privileged docker)
 ```
 
 The end-to-end test builds a *partial* mirror with `--package-filter`: every index
 is real and signed, but only the `.deb` files the test needs are downloaded. It
 mirrors the Ubuntu archive, a PPA and a repo-setup `.deb` that the test generates.
 It then upgrades and installs packages in a container started with
-`--network none`, and finally runs `restore`.
+`--network none`, and finally runs `restore`. A second client with
+`libc6:i386` installed checks the multiarch behaviour. The snap test boots
+systemd and snapd in a privileged container, disconnects its network, and then
+installs the snaps from the mirror.
 
 What has been verified so far:
 

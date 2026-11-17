@@ -172,4 +172,48 @@ EOS
 # guard against the client script silently not running at all
 grep -qx "CLIENT OK" "$WORK/client.log" || fail "offline client test did not complete"
 
+step "Multiarch: client with i386 enabled and libc6:i386 installed (mirror is amd64 only)"
+"${DOCKER[@]}" build -q -t "$CLIENT_IMG-i386" - <<EOF
+FROM $CLIENT_IMG
+# Put libc6 (amd64 AND i386) at the 26.04 release version, so the mirror has a
+# newer amd64 libc6 whose i386 twin (Multi-Arch: same) is not in the mirror.
+RUN dpkg --add-architecture i386 && apt-get update \\
+ && V="\$(apt-cache madison libc6 | grep ' resolute/main ' | head -1 | awk -F'|' '{print \$2}' | tr -d ' ')" \\
+ && echo "libc6 release version: \$V" && test -n "\$V" \\
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades --no-install-recommends \\
+      libc6=\$V libc-bin=\$V libc-gconv-modules-extra=\$V libc6:i386=\$V libc-gconv-modules-extra:i386=\$V \\
+ && rm -rf /var/lib/apt/lists/*
+EOF
+"${DOCKER[@]}" run --rm -i --network none \
+  -v "$M:/media/usb/mirror:ro" "$CLIENT_IMG-i386" bash -s <<'EOS' | tee "$WORK/client-i386.log"
+set -Eeuo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+S=/media/usb/mirror/ubuntu-airgap.sh
+LOG=/var/log/ubuntu-airgap-http.log
+count_i386() { dpkg-query -W -f='${binary:Package}\n' | grep -c ':i386$' || true; }
+i386_before="$(count_i386)"
+
+echo "--- install -y (apt upgrade) succeeds"
+$S install -y 2>&1 | tee /tmp/install.log
+grep -q "foreign architectures enabled (i386)" /tmp/install.log || fail "no multiarch warning"
+if grep '" 404 ' "$LOG"; then fail "404s with i386 enabled"; fi
+if grep -q 'binary-i386' "$LOG"; then fail "apt requested i386 indexes"; fi
+upg="$(apt list --upgradable 2>/dev/null | tail -n +2)"
+[[ "$upg" == libc6/* || "$upg" == *$'\n'libc6/* ]] || fail "expected libc6 to be kept back (multiarch pair), got: $upg"
+grep -q "not upgraded (kept back):.*libc6" /tmp/install.log || fail "kept-back libc6 not reported"
+grep -q "Multi-Arch: same packages must have the same version" /tmp/install.log || fail "no multiarch explanation"
+[[ "$(count_i386)" -eq "$i386_before" ]] || fail "i386 packages changed"
+
+echo "--- install -y --full-upgrade never removes i386 packages"
+set +e; $S install -y --full-upgrade --no-snaps >/tmp/full.log 2>&1; rc=$?; set -e
+grep -E '==>|WARN|ERROR' /tmp/full.log || true
+if [[ $rc -ne 0 ]]; then
+  grep -q "refusing to remove them unattended" /tmp/full.log || fail "full-upgrade failed (rc=$rc)"
+fi
+[[ "$(dpkg-query -W -f='${db:Status-Abbrev}' libc6:i386)" == ii* ]] || fail "libc6:i386 was removed"
+[[ "$(count_i386)" -eq "$i386_before" ]] || fail "i386 packages changed"
+echo "MULTIARCH OK"
+EOS
+grep -qx "MULTIARCH OK" "$WORK/client-i386.log" || fail "multiarch client test did not complete"
+
 step "E2E PASSED"

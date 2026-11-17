@@ -16,7 +16,7 @@
 set -Eeuo pipefail
 trap 'printf "ERROR: unexpected failure at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
-VERSION="0.1.1"
+VERSION="0.2.0"
 SCRIPT_NAME="ubuntu-airgap.sh"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SELF_DIR="$(dirname "$SELF")"
@@ -41,6 +41,7 @@ DRY_RUN=0
 REPOS=()                                   # extra repos, see help
 PPAS=()                                    # Launchpad PPAs, e.g. git-core/ppa
 REPO_DEBS=()                               # "repo setup" .deb files/URLs (vendor packages that add a repo)
+SNAPS=()                                   # snaps to download: NAME or NAME=CHANNEL
 DEBMIRROR_EXTRA=()
 
 PORT=8080
@@ -52,6 +53,7 @@ NO_UPGRADE=0
 KEEP_SERVING=0
 PHASED_ALL=1
 INSTALL_SETUP_DEBS=0
+NO_SNAPS=0
 
 SOURCES_FILE="/etc/apt/sources.list.d/ubuntu-airgap.sources"
 APT_CONF_FILE="/etc/apt/apt.conf.d/90ubuntu-airgap"
@@ -77,7 +79,9 @@ ${C_B}ubuntu-airgap.sh $VERSION${C_0} - offline Ubuntu mirror + airgap upgrader
 
 ${C_B}COMMANDS${C_0}
   download   (online machine)  Build/refresh the mirror in a docker container.
-  install    (airgap machine)  Serve the mirror, configure apt, update + upgrade.
+  install    (airgap machine)  Serve the mirror, configure apt, update + upgrade,
+                               then install/refresh the snaps from the mirror.
+  snaps      (airgap machine)  Only install/refresh the snaps from the mirror.
   serve      (airgap machine)  Only serve the mirror over HTTP (foreground).
   restore    (airgap machine)  Remove the offline apt config, restore original sources.
   version                      Print the version.
@@ -110,6 +114,10 @@ ${C_B}DOWNLOAD OPTIONS${C_0}
                             The .deb is unpacked (not installed); its apt sources,
                             keys and apt pinning (preferences.d) are used, and the
                             .deb itself is stored in the mirror (setup-debs/).
+  --snap NAME[=CHANNEL]     Download a snap (repeatable), e.g. --snap firefox or
+                            --snap firefox=latest/beta. Its base, content snaps
+                            (default-providers) and snapd are added automatically.
+                            Downloaded with their signed .assert files.
   --package-filter REGEX    Only download .deb files whose path matches REGEX (all
                             index files are still mirrored). For tests/partial mirrors.
   --image IMAGE             Docker base image (default: $BASE_IMAGE)
@@ -127,6 +135,7 @@ ${C_B}INSTALL / SERVE OPTIONS${C_0}
   --no-upgrade              Configure + apt update only
   --keep-serving            Keep the HTTP server running after the upgrade (Ctrl-C ends)
   --no-phased-all           Respect Ubuntu phased updates (default: install all updates)
+  --no-snaps                Do not install/refresh snaps (install command)
   --install-setup-debs      Also install the .deb files from --repo-deb (e.g. to get
                             vendor's install tool). Their online sources are
                             disabled again automatically.
@@ -184,6 +193,8 @@ while [[ $# -gt 0 ]]; do
     --ppa)              PPAS+=("${2#ppa:}"); shift ;;
     --repo-deb)         REPO_DEBS+=("$2"); shift ;;
     --install-setup-debs) INSTALL_SETUP_DEBS=1 ;;
+    --snap)             SNAPS+=("$2"); shift ;;
+    --no-snaps)         NO_SNAPS=1 ;;
     --package-filter)   PACKAGE_FILTER="$2"; shift ;;
     --image)            BASE_IMAGE="$2"; shift ;;
     --dry-run)          DRY_RUN=1 ;;
@@ -249,6 +260,10 @@ cmd_download() {
   for p in "${PPAS[@]}"; do
     [[ "$p" =~ ^[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*$ ]] || die "--ppa expects OWNER/NAME (e.g. git-core/ppa), got '$p'"
   done
+  for p in "${SNAPS[@]}"; do
+    [[ "$p" =~ ^[a-z0-9][a-z0-9-]*(=[a-z0-9][a-z0-9./-]*)?$ ]] \
+      || die "--snap expects NAME or NAME=CHANNEL (e.g. firefox or firefox=latest/beta), got '$p'"
+  done
   for d in "${REPO_DEBS[@]}"; do
     if [[ ! "$d" =~ ^https?:// ]] && [[ ! -r "$d" || "$d" != *.deb ]]; then
       die "--repo-deb '$d' is not a readable .deb file or http(s) URL"
@@ -264,7 +279,8 @@ cmd_download() {
   "${DOCKER[@]}" build -q -t "$img" - >/dev/null <<EOF
 FROM $BASE_IMAGE
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
-      debmirror gpgv gnupg ca-certificates curl xz-utils bzip2 python3 ubuntu-keyring \\
+      debmirror gpgv gnupg ca-certificates curl xz-utils bzip2 python3 python3-yaml \\
+      ubuntu-keyring snapd squashfs-tools \\
     && rm -rf /var/lib/apt/lists/*
 EOF
 
@@ -304,6 +320,7 @@ EOF
       "${flags[@]}" \
       ${PACKAGE_FILTER:+--package-filter "$PACKAGE_FILTER"} \
       "${newrepos[@]/#/--repo=}" \
+      "${SNAPS[@]/#/--snap=}" \
       "${PPAS[@]/#/--ppa=}" \
       "${newdebs[@]/#/--repo-deb=}" \
       "${DEBMIRROR_EXTRA[@]/#/--debmirror-arg=}"
@@ -561,11 +578,67 @@ def deb(debfile, work):
         if os.path.isfile(p):
             print(f"pref\t{p}|{pkg}-{os.path.basename(p)}")
 
+SNAP_API = "https://api.snapcraft.io/v2/snaps/info/"
+NO_BASE_TYPES = {"base", "os", "snapd", "kernel"}
+
+
+def snap_channel(info, channel):
+    """Pick the amd64 channel-map entry for 'risk' or 'track/risk'."""
+    track, _, risk = channel.rpartition("/")
+    track = track or info.get("default-track") or "latest"
+    for cm in info["channel-map"]:
+        c = cm["channel"]
+        if c["architecture"] == "amd64" and c["track"] == track and c["risk"] == risk:
+            return cm
+    die(f"snap {info['name']}: no amd64 release in channel {track}/{risk}")
+
+
+def snap_resolve(specs):
+    """Resolve snaps + their bases/default-providers; print them deps-first."""
+    import yaml  # python3-yaml in the download container
+
+    order, seen = [], set()
+
+    def visit(name, channel):
+        if name in seen:
+            return
+        seen.add(name)
+        req = urllib.request.Request(
+            SNAP_API + name + "?architecture=amd64&fields=revision,version,type,confinement,base,snap-yaml",
+            headers={"Snap-Device-Series": "16", "User-Agent": "ubuntu-airgap"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                info = json.loads(r.read())
+        except (OSError, ValueError) as e:
+            die(f"snap {name} not found in the Snap Store ({e})")
+        cm = snap_channel(info, channel)
+        meta = yaml.safe_load(cm.get("snap-yaml") or "") or {}
+        stype = cm.get("type") or meta.get("type") or "app"
+        deps = []
+        if stype not in NO_BASE_TYPES:
+            deps.append(cm.get("base") or meta.get("base") or "core")
+        for plug in (meta.get("plugs") or {}).values():
+            if isinstance(plug, dict) and plug.get("default-provider"):
+                deps.append(str(plug["default-provider"]).split(":")[0])
+        for dep in deps:
+            visit(dep, "latest/stable")
+        order.append((name, channel, cm["revision"], cm.get("confinement") or "strict", stype))
+
+    visit("snapd", "latest/stable")            # newer snaps need a recent snapd
+    for spec in specs:
+        name, _, channel = spec.partition("=")
+        visit(name.strip(), channel.strip() or "latest/stable")
+    for row in order:
+        print("\t".join(str(x) for x in row))
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "ppa":
         ppa(sys.argv[2], sys.argv[3], sys.argv[4])
     elif sys.argv[1] == "deb":
         deb(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "snaps":
+        snap_resolve(sys.argv[2:])
 PY
 )
 
@@ -603,6 +676,45 @@ expand_extras() {
       echo "setupdeb|setup-debs/$(basename "$f")" >>"$manifest"
     fi
   done
+}
+
+# Download snaps (+ dependencies) with "snap download" (works without snapd
+# running). Each .snap comes with a .assert file holding its signed assertions.
+fetch_snaps() {
+  local m="$1" manifest="$2" dir="$1/snaps" name ch rev conf type f tmpd keep=() total=0
+  if [[ ${#SNAPS[@]} -eq 0 ]]; then
+    if [[ $DRY_RUN -eq 0 ]]; then rm -rf "$dir"; fi
+    return 0
+  fi
+  log "Resolving snaps: ${SNAPS[*]}"
+  python3 -I -c "$PY_HELPER" snaps "${SNAPS[@]}" >/tmp/snaps.tsv || die "cannot resolve snaps"
+  mkdir -p "$dir"
+  while IFS=$'\t' read -r name ch rev conf type; do
+    if [[ $DRY_RUN -eq 1 ]]; then log "  snap $name $ch r$rev ($type, $conf)"; continue; fi
+    if [[ -s "$dir/${name}_$rev.snap" && -s "$dir/${name}_$rev.assert" ]]; then
+      log "  snap $name $ch r$rev ($type, $conf) - already downloaded"
+    else
+      log "  snap $name $ch r$rev ($type, $conf) - downloading"
+      tmpd="$(mktemp -d "$dir/.dl.XXXXXX")"
+      (cd "$tmpd" && snap download "$name" --channel="$ch" >/dev/null) || die "snap download $name failed"
+      f="$(find "$tmpd" -name "${name}_*.snap" -print -quit)"
+      [[ -n "$f" && -f "${f%.snap}.assert" ]] || die "snap download $name produced no .snap/.assert"
+      rev="$(basename "$f" .snap)"; rev="${rev##*_}"      # store may have moved on
+      chmod 644 "$f" "${f%.snap}.assert"
+      mv -f "$f" "${f%.snap}.assert" "$dir/"
+      rm -rf "$tmpd"
+    fi
+    keep+=("${name}_$rev.snap" "${name}_$rev.assert")
+    total=$((total + $(stat -c %s "$dir/${name}_$rev.snap")))
+    echo "snap|$name|snaps/${name}_$rev.snap|snaps/${name}_$rev.assert|$ch|$conf|$type" >>"$manifest"
+  done </tmp/snaps.tsv
+  if [[ $DRY_RUN -eq 0 ]]; then
+    for f in "$dir"/* "$dir"/.dl.*; do                       # drop old revisions
+      [[ -e "$f" ]] || continue
+      [[ " ${keep[*]} " == *" $(basename "$f") "* ]] || rm -rf "$f"
+    done
+    log "Snaps: ${#keep[@]} files, $((total / 1048576)) MiB"
+  fi
 }
 
 cmd_container() {
@@ -646,6 +758,8 @@ cmd_container() {
     run_debmirror "$m/repos/$R_NAME" "$method" "$host" "$root" "$R_SUITES" "$R_COMPONENTS" "$key" amd64
     echo "repo|$R_NAME|repos/$R_NAME|$(csv_to_space "$R_SUITES")|$(csv_to_space "$R_COMPONENTS")|$R_NAME.gpg" >>"$manifest_tmp"
   done
+
+  fetch_snaps "$m" "$manifest_tmp"
 
   if [[ $DRY_RUN -eq 1 ]]; then rm -f "$manifest_tmp"; log "Dry run finished (nothing downloaded besides indexes)"; return; fi
 
@@ -776,13 +890,38 @@ write_apt_config() {
 }
 
 preflight_warnings() {
-  local fa; fa="$(dpkg --print-foreign-architectures 2>/dev/null | xargs || true)"
-  if [[ -n "$fa" ]]; then warn "foreign architectures enabled ($fa): their packages are not in the mirror and will not be upgraded"; fi
-  command -v snap >/dev/null && snap list 2>/dev/null | grep -q . \
-    && warn "snap packages (e.g. Firefox) are NOT updated by this mirror"
+  local fa n
+  fa="$(dpkg --print-foreign-architectures 2>/dev/null | xargs || true)"
+  if [[ -n "$fa" ]]; then
+    n="$(foreign_installed | wc -l)"
+    warn "foreign architectures enabled ($fa) with $n installed package(s); the mirror is amd64 only:"
+    warn "  those packages are not upgraded, and Multi-Arch: same pairs (e.g. libc6 + libc6:i386)"
+    warn "  must stay at the same version, so their amd64 half is kept back too."
+  fi
+  if command -v snap >/dev/null && snap list >/dev/null 2>&1 && ! grep -q '^snap|' "$MIRROR_DIR/$MANIFEST_NAME"; then
+    warn "this mirror contains no snaps; installed snaps are not updated (download with --snap NAME)"
+  fi
   local rel; rel="$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | tr -d '"' || true)"
   grep -q "^repo|ubuntu|ubuntu|.*\b$rel\b" "$MIRROR_DIR/$MANIFEST_NAME" \
     || warn "this system is '$rel' but the mirror's Ubuntu suites are: $(grep '^repo|ubuntu|' "$MIRROR_DIR/$MANIFEST_NAME" | cut -d'|' -f4)"
+}
+
+# installed packages of a foreign (non-amd64) architecture, as NAME:ARCH
+foreign_installed() {
+  dpkg-query -W -f='${db:Status-Abbrev} ${Package}:${Architecture}\n' 2>/dev/null \
+    | awk '$1 ~ /^[ih]i/ && $2 !~ /:(amd64|all)$/ {print $2}'
+}
+
+# After the upgrade: list what apt could not upgrade from this mirror, and why
+report_kept_back() {
+  local left
+  left="$(apt list --upgradable 2>/dev/null | awk -F/ 'NR>1 {print $1}' | xargs || true)"
+  [[ -n "$left" ]] || return 0
+  warn "not upgraded (kept back): $left"
+  if [[ -n "$(foreign_installed)" ]]; then
+    warn "  likely because their i386/foreign counterparts are installed but not in the mirror"
+    warn "  (Multi-Arch: same packages must have the same version on all architectures)"
+  fi
 }
 
 report_404() {
@@ -800,17 +939,29 @@ report_404() {
 ALLOW_VARIANT_SWITCH=()
 check_variant_switches() {
   ALLOW_VARIANT_SWITCH=()
-  local sim line pkg old new switch=0 real=()
+  local sim line pkg old new switch=0 real=() fremove=()
   local simcmd=(apt-get -s "$UPGRADE_CMD")
   [[ "$UPGRADE_CMD" == upgrade ]] && simcmd+=(-o APT::Get::Upgrade-Allow-New=true)
   sim="$("${simcmd[@]}" 2>/dev/null)" || return 0
   local re='^Inst ([^ ]+) \[([^]]+)\] \(([^ ]+) '   # Inst NAME [OLD] (NEW Origin/suite [arch])
   while read -r line; do
+    # full-upgrade may remove i386 packages (e.g. Wine/Steam libs) to upgrade
+    # their amd64 Multi-Arch: same twin - never do that unattended
+    if [[ "$line" =~ ^Remv\ ([^ ]+:[a-z0-9]+)\  && "${BASH_REMATCH[1]}" != *:amd64 ]]; then
+      fremove+=("${BASH_REMATCH[1]}"); continue
+    fi
     [[ "$line" =~ $re ]] || continue
     pkg="${BASH_REMATCH[1]}"; old="${BASH_REMATCH[2]}"; new="${BASH_REMATCH[3]}"
     if [[ "$old" == "$new" ]]; then switch=$((switch + 1))
     elif dpkg --compare-versions "$new" lt "$old"; then real+=("$pkg $old -> $new"); fi
   done <<<"$sim"
+  if [[ ${#fremove[@]} -gt 0 ]]; then
+    warn "apt $UPGRADE_CMD would REMOVE ${#fremove[@]} foreign-architecture package(s), because"
+    warn "their architecture is not in the mirror: ${fremove[*]:0:15}"
+    if [[ $ASSUME_YES -eq 1 ]]; then
+      die "refusing to remove them unattended; use plain 'install' (apt upgrade) or run without -y"
+    fi
+  fi
   if [[ ${#real[@]} -gt 0 ]]; then
     warn "the mirror would DOWNGRADE ${#real[@]} package(s) (is the mirror older than this system?):"
     printf '    %s\n' "${real[@]:0:20}" >&2
@@ -821,6 +972,40 @@ check_variant_switches() {
     log "(same version; apt lists them under DOWNGRADING - that is expected)"
     ALLOW_VARIANT_SWITCH=(--allow-downgrades)
   fi
+}
+
+# Install/refresh the snaps on the mirror: ack their signed assertions first,
+# then install in dependency order (as written by the download). Only signed
+# installs - no --dangerous.
+install_snaps() {
+  local type name file assert ch conf stype cur rev flags failed=0
+  grep -q '^snap|' "$MIRROR_DIR/$MANIFEST_NAME" || return 0
+  if ! command -v snap >/dev/null; then warn "mirror has snaps but snap is not installed; skipping"; return 0; fi
+  if ! snap list >/dev/null 2>&1; then warn "mirror has snaps but snapd is not running; skipping"; return 0; fi
+  log "Snaps: importing signed assertions"
+  while IFS='|' read -r type name file assert _ <&3; do
+    [[ "$type" == snap ]] || continue
+    snap ack "$MIRROR_DIR/$assert" || die "snap ack failed for $name ($assert)"
+  done 3<"$MIRROR_DIR/$MANIFEST_NAME"
+  while IFS='|' read -r type name file assert ch conf stype <&3; do
+    [[ "$type" == snap ]] || continue
+    rev="$(basename "$file" .snap)"; rev="${rev##*_}"
+    cur="$(snap list "$name" 2>/dev/null | awk 'NR==2 {print $3}' || true)"
+    if [[ "$cur" == "$rev" ]]; then log "snap $name is already at revision $rev"; continue; fi
+    if [[ "$cur" =~ ^[0-9]+$ && "$cur" -gt "$rev" ]]; then
+      log "snap $name: installed revision $cur is newer than the mirror ($rev); skipping"; continue
+    fi
+    flags=(); if [[ "$conf" == classic ]]; then flags+=(--classic); fi
+    log "snap $name ($stype, $ch): ${cur:-not installed} -> revision $rev"
+    snap install "${flags[@]}" "$MIRROR_DIR/$file" || { warn "snap install $name failed"; failed=1; }
+  done 3<"$MIRROR_DIR/$MANIFEST_NAME"
+  [[ $failed -eq 0 ]] || die "some snaps failed to install"
+}
+
+cmd_snaps() {
+  need_root; find_mirror
+  log "Mirror: $MIRROR_DIR"
+  install_snaps
 }
 
 cmd_install() {
@@ -872,8 +1057,11 @@ cmd_install() {
     DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-$([[ $ASSUME_YES -eq 1 ]] && echo noninteractive || echo readline)}" \
       apt "$UPGRADE_CMD" "${yes[@]}" "${ALLOW_VARIANT_SWITCH[@]}"
     report_404
+    report_kept_back
     if [[ -f /var/run/reboot-required ]]; then warn "a reboot is required to finish the upgrade"; fi
   fi
+
+  if [[ $NO_SNAPS -eq 0 ]]; then install_snaps; fi
 
   if [[ $KEEP_SERVING -eq 1 ]]; then
     log "Still serving (you can now 'apt install' from the mirror). Press Ctrl-C to stop."
@@ -909,6 +1097,7 @@ case "$CMD" in
   download)   cmd_download ;;
   _container) cmd_container ;;
   install)    cmd_install ;;
+  snaps)      cmd_snaps ;;
   serve)      cmd_serve ;;
   restore)    cmd_restore ;;
   version|--version|-V) echo "$SCRIPT_NAME $VERSION" ;;

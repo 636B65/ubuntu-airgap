@@ -39,6 +39,10 @@ expect "repo needs components"  nonzero "flat repositories" -- "$S" download -d 
 expect "repo bad key"           nonzero "unknown key"       -- "$S" download -d "$tmp/m" --repo "name=x;url=https://e.com;suites=a;components=b;key=k;foo=1"
 expect "repo key file missing"  nonzero "not readable"      -- "$S" download -d "$tmp/m" --repo "name=x;url=https://e.com;suites=a;components=b;key=$tmp/missing.gpg"
 expect "ppa format"             nonzero "OWNER/NAME"        -- "$S" download -d "$tmp/m" --ppa "not a ppa"
+expect "snap name format"       nonzero "NAME or NAME=CHANNEL" -- "$S" download -d "$tmp/m" --snap "Fire Fox"
+expect "snap channel format"    nonzero "NAME or NAME=CHANNEL" -- "$S" download -d "$tmp/m" --snap "firefox=bad channel"
+expect "snaps needs root"       nonzero "run as root|not a mirror" -- "$S" snaps -m "$tmp"
+expect "help mentions --snap"   0 "--snap NAME"             -- "$S" help
 expect "repo-deb must exist"    nonzero "not a readable"    -- "$S" download -d "$tmp/m" --repo-deb "$tmp/missing.deb"
 expect "--opt=value form"       nonzero "--dest DIR is required" -- "$S" download --components=main
 if [[ $EUID -ne 0 ]]; then

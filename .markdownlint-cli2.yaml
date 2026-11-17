@@ -2,5 +2,7 @@ config:
   MD013: false          # long lines (tables, commands)
   MD033: false
   MD060: false          # table column style
+  MD024:
+    siblings_only: true # Keep a Changelog repeats "Added"/"Fixed" per version
 ignores:
   - node_modules/**
