@@ -116,5 +116,55 @@ class Spec(unittest.TestCase):
         )
 
 
+class StoreGet(unittest.TestCase):
+    """store_get retries rate limits and server errors, not client errors."""
+
+    def run_with(self, responses, tries=6):
+        import io
+        import urllib.error
+        from unittest import mock
+
+        calls, sleeps = [], []
+
+        def fake_urlopen(req, timeout):
+            calls.append(req)
+            r = responses.pop(0)
+            if isinstance(r, Exception):
+                raise r
+            return io.BytesIO(r)
+
+        with mock.patch.object(helper.urllib.request, "urlopen", fake_urlopen):
+            try:
+                return helper.store_get("req", tries=tries, sleep=sleeps.append), calls, sleeps
+            except urllib.error.HTTPError as e:
+                return e, calls, sleeps
+
+    @staticmethod
+    def http(code, retry_after=None):
+        import email.message
+        import urllib.error
+
+        h = email.message.Message()
+        if retry_after:
+            h["Retry-After"] = retry_after
+        return urllib.error.HTTPError("u", code, "x", h, None)
+
+    def test_retries_429_then_succeeds(self):
+        res, calls, sleeps = self.run_with([self.http(429, "7"), self.http(503), b'{"ok": 1}'])
+        self.assertEqual(res, {"ok": 1})
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(sleeps, [7, 10])
+
+    def test_404_is_not_retried(self):
+        res, calls, sleeps = self.run_with([self.http(404)])
+        self.assertEqual(res.code, 404)
+        self.assertEqual((len(calls), sleeps), (1, []))
+
+    def test_gives_up_after_tries(self):
+        res, calls, sleeps = self.run_with([self.http(429, "999")] * 3, tries=3)
+        self.assertEqual(res.code, 429)
+        self.assertEqual((len(calls), sleeps), (3, [120, 120]))
+
+
 if __name__ == "__main__":
     unittest.main()

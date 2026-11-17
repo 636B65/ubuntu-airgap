@@ -440,6 +440,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
 import urllib.request
 
 
@@ -605,6 +607,30 @@ def snap_channel(info, channel):
     die(f"snap {info['name']}: no amd64 release in channel {track}/{risk}")
 
 
+def store_get(req, tries=6, sleep=time.sleep):
+    """GET from the Snap Store, retrying rate limits, server and network errors.
+
+    Honours Retry-After (capped at 120 s), else backs off 5, 10, 20, 40, 80 s.
+    """
+    for attempt in range(1, tries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code != 429 and e.code < 500:
+                raise
+            err, after = e, e.headers.get("Retry-After") if e.headers else None
+        except (urllib.error.URLError, TimeoutError) as e:
+            err, after = e, None
+        if attempt == tries:
+            raise err
+        delay = int(after) if after and after.isdigit() else 5 * 2 ** (attempt - 1)
+        delay = min(delay, 120)
+        print(f"WARNING: Snap Store: {err}; retrying in {delay}s ({attempt}/{tries - 1})",
+              file=sys.stderr)
+        sleep(delay)
+
+
 def snap_resolve(specs):
     """Resolve snaps + their bases/default-providers; print them deps-first."""
     import yaml  # python3-yaml in the download container
@@ -619,10 +645,13 @@ def snap_resolve(specs):
             SNAP_API + name + "?architecture=amd64&fields=revision,version,type,confinement,base,snap-yaml",
             headers={"Snap-Device-Series": "16", "User-Agent": "ubuntu-airgap"})
         try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                info = json.loads(r.read())
+            info = store_get(req)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                die(f"snap {name} not found in the Snap Store")
+            die(f"Snap Store query for {name} failed ({e})")
         except (OSError, ValueError) as e:
-            die(f"snap {name} not found in the Snap Store ({e})")
+            die(f"Snap Store query for {name} failed ({e})")
         cm = snap_channel(info, channel)
         meta = yaml.safe_load(cm.get("snap-yaml") or "") or {}
         stype = cm.get("type") or meta.get("type") or "app"

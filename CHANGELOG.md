@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mirrored with index files only and a warning, also when a failed attempt or an
   earlier run left its directory behind. Previously the `debmirror` retries could
   never succeed after the first attempt failed.
+- `--snap`: Snap Store API queries are retried on rate limiting (HTTP 429),
+  server errors and network errors, honouring `Retry-After`. Errors are no
+  longer all reported as "not found in the Snap Store".
 
 ## [0.2.0] - 2026-11-17
 
