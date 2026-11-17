@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-17
+
 ### Fixed
 
 - With `--package-filter`, a pocket where nothing matches no longer fails the
@@ -95,7 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: ShellCheck, ruff, codespell, actionlint, markdownlint, unit tests, and an
   offline end-to-end test (amd64 and amd64v3). There is also a release workflow.
 
-[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/636B65/ubuntu-airgap/releases/tag/v0.1.0
