@@ -350,16 +350,17 @@ run_debmirror() {  # target method host root dists sections keyring arches
   a+=("${DEBMIRROR_EXTRA[@]}")
   # debmirror refuses an empty result ("No packages after parsing") unless the
   # mirror directory is new, so let debmirror create it. With --package-filter a
-  # repo may legitimately match nothing: start such a repo over each time.
-  if [[ -n "$PACKAGE_FILTER" && -d "$target" ]] && [[ -z "$(find "$target" -name '*.deb' -print -quit)" ]]; then
-    rm -rf "$target"
-  fi
+  # repo may legitimately match nothing: start such a repo over each time,
+  # including before each retry (a failed attempt leaves the directory behind).
   mkdir -p "$(dirname "$target")"
   log "debmirror $method://$host/$root  dists=$dists  sections=$sections  arch=$arches"
   # The archive republishes every ~30 min; a publish during the download makes
   # index checksums mismatch. A retry fetches the new, consistent set.
   local try
   for try in 1 2 3; do
+    if [[ -n "$PACKAGE_FILTER" && -d "$target" ]] && [[ -z "$(find "$target" -name '*.deb' -print -quit)" ]]; then
+      rm -rf "$target"
+    fi
     if debmirror "${a[@]}" "$target"; then return 0; fi
     [[ $try -lt 3 ]] || break
     warn "debmirror failed (attempt $try/3), retrying in 60s..."
