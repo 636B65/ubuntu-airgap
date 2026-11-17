@@ -33,7 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: ShellCheck
-        run: shellcheck -x ubuntu-airgap.sh tests/*.sh
+        run: shellcheck -x ubuntu-airgap.sh tests/*.sh .github/*.sh
 
       - name: Bash syntax
         run: |
@@ -156,3 +156,27 @@ jobs:
             ${{ runner.temp }}/e2e-snap/*.log
             ${{ runner.temp }}/e2e-snap/mirror/airgap-mirror.conf
           if-no-files-found: ignore
+
+  # After a green push to main: if VERSION in the script has no tag yet, tag
+  # that commit and publish the release. To release, bump VERSION + CHANGELOG.
+  release:
+    name: Release (if VERSION is new)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, zizmor, unit, e2e, e2e-snap]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the tag and the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Release when the VERSION tag does not exist yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$(sed -n 's/^VERSION="\(.*\)"$/\1/p' ubuntu-airgap.sh)"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag already exists: nothing to release"
+          else
+            .github/release.sh "$tag"
+          fi

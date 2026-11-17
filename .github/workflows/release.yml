@@ -1,5 +1,7 @@
 name: Release
 
+# A tag pushed by a person. CI publishes releases itself after a green push to
+# main whose VERSION has no tag yet (see the release job in ci.yml).
 on:
   push:
     tags: ["v*.*.*"]
@@ -18,38 +20,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check that the tag matches VERSION in the script
-        run: |
-          script_version="$(sed -n 's/^VERSION="\(.*\)"$/\1/p' ubuntu-airgap.sh)"
-          tag="${GITHUB_REF_NAME#v}"
-          echo "script: $script_version  tag: $tag"
-          [[ "$script_version" == "$tag" ]] || { echo "::error::VERSION ($script_version) != tag ($tag)"; exit 1; }
-          [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::tag is not semver"; exit 1; }
-          grep -q "^## \[$tag\]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no section for $tag"; exit 1; }
-
-      - name: Quick tests
-        run: |
-          tests/test_cli.sh
-          python3 -m unittest discover -s tests
-
-      - name: Release notes from CHANGELOG.md
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          awk -v t="$tag" '
-            $0 ~ "^## \\[" t "\\]" {on=1; next}
-            on && /^## \[/ {exit}
-            on {print}
-          ' CHANGELOG.md > notes.md
-          cat notes.md
-
-      - name: Create release
+      - name: Check, test and publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir dist
-          cp ubuntu-airgap.sh airgap.conf.example dist/
-          (cd dist && sha256sum ./* > SHA256SUMS)
-          prerelease=()
-          [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "ubuntu-airgap $GITHUB_REF_NAME" --notes-file notes.md "${prerelease[@]}"
+        run: .github/release.sh "$GITHUB_REF_NAME"

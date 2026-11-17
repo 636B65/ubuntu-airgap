@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2026-11-17
 
+### Changed
+
+- Releases are automatic: when CI passes on `main` and the `VERSION` in the
+  script has no tag yet, CI tags that commit and publishes the release. Pushing
+  the tag yourself still works. Both paths use `.github/release.sh`.
+
 ### Fixed
 
 - With `--package-filter`, a pocket where nothing matches no longer fails the

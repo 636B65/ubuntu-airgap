@@ -305,10 +305,13 @@ This project uses [Semantic Versioning](https://semver.org/). To release:
 
 1. Update `VERSION="x.y.z"` in `ubuntu-airgap.sh`.
 2. Add a `## [x.y.z]` section to `CHANGELOG.md`.
-3. Commit, then `git tag vx.y.z && git push --tags`.
+3. Push to `main`.
 
-The release workflow checks that the tag, the script and the changelog all agree,
-then publishes the script with its SHA256 sums.
+When CI passes on `main` and the tag `vx.y.z` does not exist yet, CI tags that
+commit and publishes the release. Pushing the tag yourself
+(`git tag vx.y.z && git push --tags`) also works. Either way the release workflow
+checks that the tag, the script and the changelog all agree, then publishes the
+script with its SHA256 sums.
 
 ## License
 
