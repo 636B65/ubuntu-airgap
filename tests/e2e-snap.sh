@@ -54,7 +54,7 @@ EOF
 for _ in $(seq 60); do
   "${DOCKER[@]}" exec "$CT" snap list >/dev/null 2>&1 && break; sleep 2
 done
-"${DOCKER[@]}" exec "$CT" snap version | head -2
+"${DOCKER[@]}" exec "$CT" snap version | sed -n 1,2p   # not head: SIGPIPE under pipefail
 
 step "Disconnect the network (air gap)"
 "${DOCKER[@]}" network disconnect bridge "$CT"
