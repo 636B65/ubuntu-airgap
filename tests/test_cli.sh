@@ -94,8 +94,11 @@ dm_run() {  # TARGET: run run_debmirror with the stub; sleep must never be reach
     eval "$1"; run_debmirror "$3" http archive.ubuntu.com ubuntu resolute-security main /k amd64' _ "$dm_fn" "$2" "$1"
 }
 expect "empty pocket, stale .debs: non-fatal"  0 "mirroring index files only" -- dm_run "$tmp/dm/pocket" '^$'
-[[ -d "$tmp/dm/pocket/dists" && ! -e "$tmp/dm/pocket/pool/old_1.0_amd64.deb" ]] \
-  && ok "empty pocket re-mirrored fresh" || bad "empty pocket re-mirrored fresh" "$(find "$tmp/dm/pocket")"
+if [[ -d "$tmp/dm/pocket/dists" && ! -e "$tmp/dm/pocket/pool/old_1.0_amd64.deb" ]]; then
+  ok "empty pocket re-mirrored fresh"
+else
+  bad "empty pocket re-mirrored fresh" "$(find "$tmp/dm/pocket")"
+fi
 expect "empty pocket, no .debs: first try"     0 ""                           -- dm_run "$tmp/dm/pocket" '^$'
 mkdir -p "$tmp/dm/full"
 expect "no filter: empty result stays fatal"   nonzero "unexpected retry"     -- dm_run "$tmp/dm/full" ''
