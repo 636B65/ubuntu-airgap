@@ -68,6 +68,10 @@ SERVER_LOG="/var/log/ubuntu-airgap-http.log"
 # ----------------------------------------------------------------------------
 if [[ -t 1 ]]; then C_B=$'\e[1m'; C_G=$'\e[32m'; C_Y=$'\e[33m'; C_R=$'\e[31m'; C_0=$'\e[0m'
 else C_B=""; C_G=""; C_Y=""; C_R=""; C_0=""; fi
+# curl retries transient errors (timeouts, 408/429/5xx) with exponential
+# backoff for up to 15 min, so a short server outage does not fail a download
+CURL_RETRY=(--retry 10 --retry-max-time 900)
+
 log()  { printf '%s==>%s %s\n' "$C_G$C_B" "$C_0" "$*"; }
 warn() { printf '%sWARNING:%s %s\n' "$C_Y$C_B" "$C_0" "$*" >&2; }
 die()  { printf '%sERROR:%s %s\n' "$C_R$C_B" "$C_0" "$*" >&2; exit 1; }
@@ -451,10 +455,34 @@ def die(msg):
     print("ERROR: " + msg, file=sys.stderr)
     sys.exit(1)
 
+def http_get(req, tries=6, sleep=time.sleep):
+    """GET, retrying rate limits (429), server errors (5xx) and network errors.
+
+    Honours Retry-After (capped at 120 s), else backs off 5, 10, 20, 40, 80 s.
+    Other HTTP errors (404, ...) are raised at once.
+    """
+    for attempt in range(1, tries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 and e.code < 500:
+                raise
+            err, after = e, e.headers.get("Retry-After") if e.headers else None
+        except (urllib.error.URLError, TimeoutError) as e:
+            err, after = e, None
+        if attempt == tries:
+            raise err
+        delay = int(after) if after and after.isdigit() else 5 * 2 ** (attempt - 1)
+        delay = min(delay, 120)
+        url = req.full_url if hasattr(req, "full_url") else req
+        print(f"WARNING: {url}: {err}; retrying in {delay}s ({attempt}/{tries - 1})",
+              file=sys.stderr)
+        sleep(delay)
+
+
 def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "ubuntu-airgap"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read()
+    return http_get(urllib.request.Request(url, headers={"User-Agent": "ubuntu-airgap"}))
 
 def build_keyring(sources, out, only_fpr=None):
     """Import key files (armored/binary) and export one binary keyring."""
@@ -610,27 +638,8 @@ def snap_channel(info, channel):
 
 
 def store_get(req, tries=6, sleep=time.sleep):
-    """GET from the Snap Store, retrying rate limits, server and network errors.
-
-    Honours Retry-After (capped at 120 s), else backs off 5, 10, 20, 40, 80 s.
-    """
-    for attempt in range(1, tries + 1):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            if e.code != 429 and e.code < 500:
-                raise
-            err, after = e, e.headers.get("Retry-After") if e.headers else None
-        except (urllib.error.URLError, TimeoutError) as e:
-            err, after = e, None
-        if attempt == tries:
-            raise err
-        delay = int(after) if after and after.isdigit() else 5 * 2 ** (attempt - 1)
-        delay = min(delay, 120)
-        print(f"WARNING: Snap Store: {err}; retrying in {delay}s ({attempt}/{tries - 1})",
-              file=sys.stderr)
-        sleep(delay)
+    """GET JSON from the Snap Store (retried like http_get)."""
+    return json.loads(http_get(req, tries, sleep))
 
 
 def snap_resolve(specs):
@@ -700,7 +709,7 @@ expand_extras() {
     log "Reading repository setup package $d"
     if [[ "$d" =~ ^https?:// ]]; then
       f="$work/$(basename "${d%%\?*}")"
-      curl -fsSL -o "$f" "$d" || die "cannot download $d"
+      curl -fsSL "${CURL_RETRY[@]}" -o "$f" "$d" || die "cannot download $d"
     else f="$d"; fi
     python3 -I -c "$PY_HELPER" deb "$f" "$work" >"$work/out.tsv" || die "cannot use $d"
     while IFS=$'\t' read -r kind val; do
@@ -733,6 +742,19 @@ snap_download() {  # name channel dir
     sleep $((10 * 2 ** (try - 1)))
   done
   return 1
+}
+
+# Check that NAME's suite has dists/SUITE/InRelease or Release. Only a 404
+# means "not found"; outages are retried (CURL_RETRY) and reported as such.
+check_repo_suite() {  # name url suite
+  local name="$1" url="$2" s="$3" f code err=""
+  for f in InRelease Release; do
+    code="$(curl -sS "${CURL_RETRY[@]}" -o /dev/null -w '%{http_code}' "$url/dists/$s/$f" 2>/dev/null)" || true
+    [[ "$code" == 200 ]] && return 0
+    [[ "$code" == 404 ]] || err="${code:-000}"
+  done
+  [[ -n "$err" ]] && die "repo '$name': cannot reach $url/dists/$s/ (HTTP $err; 000 = no connection)"
+  die "repo '$name': $url/dists/$s/(In)Release not found (flat repos are not supported)"
 }
 
 # Download snaps (+ dependencies) with "snap download" (works without snapd
@@ -803,15 +825,11 @@ cmd_container() {
     if [[ "$R_KEY" =~ ^http:// ]]; then
       warn "key for '$R_NAME' is downloaded over plain http - prefer an https:// key URL"
     fi
-    if [[ "$R_KEY" =~ ^https?:// ]]; then curl -fsSL "$R_KEY" -o /tmp/key.in || die "cannot download key $R_KEY"
+    if [[ "$R_KEY" =~ ^https?:// ]]; then curl -fsSL "${CURL_RETRY[@]}" "$R_KEY" -o /tmp/key.in || die "cannot download key $R_KEY"
     else cp "$R_KEY" /tmp/key.in; fi
     if grep -q -- "-----BEGIN PGP" /tmp/key.in; then gpg --batch --yes --dearmor -o "$key" /tmp/key.in
     else cp /tmp/key.in "$key"; fi
-    for s in $(csv_to_space "$R_SUITES"); do
-      curl -fsS -o /dev/null "$R_URL/dists/$s/InRelease" 2>/dev/null \
-        || curl -fsS -o /dev/null "$R_URL/dists/$s/Release" 2>/dev/null \
-        || die "repo '$R_NAME': $R_URL/dists/$s/(In)Release not found (flat repos are not supported)"
-    done
+    for s in $(csv_to_space "$R_SUITES"); do check_repo_suite "$R_NAME" "$R_URL" "$s"; done
     run_debmirror "$m/repos/$R_NAME" "$method" "$host" "$root" "$R_SUITES" "$R_COMPONENTS" "$key" amd64
     echo "repo|$R_NAME|repos/$R_NAME|$(csv_to_space "$R_SUITES")|$(csv_to_space "$R_COMPONENTS")|$R_NAME.gpg" >>"$manifest_tmp"
   done

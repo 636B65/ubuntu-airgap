@@ -123,6 +123,38 @@ dm_flaky() {  # FAILS: prints the sleeps and whether it gave up, one line
 expect "debmirror: outage retried with backoff" 0 "^60 120 240 \$"   -- dm_flaky 3
 expect "debmirror: gives up after 5 attempts"  0 "^60 120 240 480 gave-up \$" -- dm_flaky 9
 
+# check_repo_suite: a 503 outage is retried, only a 404 means "not found"
+cat >"$tmp/srv.py" <<'PY'
+import http.server, sys
+hits = {}
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        hits[self.path] = hits.get(self.path, 0) + 1
+        if self.path.startswith("/flaky/") and hits[self.path] <= 2: code = 503
+        elif self.path.startswith("/down/"): code = 503
+        elif self.path.startswith("/flaky/dists/s/InRelease"): code = 200
+        else: code = 404
+        self.send_response(code); self.end_headers()
+    def log_message(self, *a): pass
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+open(sys.argv[1], "w").write(str(srv.server_port))
+srv.serve_forever()
+PY
+python3 -I "$tmp/srv.py" "$tmp/srv.port" & srv_pid=$!
+for _ in $(seq 50); do [[ -s "$tmp/srv.port" ]] && break; python3 -c 'import time; time.sleep(0.1)'; done
+srv="http://127.0.0.1:$(cat "$tmp/srv.port")"
+crs_fn="$(sed -n '/^check_repo_suite() {/,/^}/p' "$S")"
+crs_run() {  # URL [curl retry args]
+  NO_PROXY='*' no_proxy='*' bash -c 'set -Eeuo pipefail
+    die() { echo "ERROR: $*"; exit 1; }
+    CURL_RETRY=('"${2:---retry 10 --retry-max-time 900}"')
+    eval "$1"; check_repo_suite r "$2" s && echo found' _ "$crs_fn" "$1"
+}
+expect "repo check: 503 outage retried, then found" 0 "^found$"            -- crs_run "$srv/flaky"
+expect "repo check: 404 means not found"           1 "not found \(flat"    -- crs_run "$srv/missing"
+expect "repo check: outage is not 'not found'"     1 "cannot reach .*HTTP 503" -- crs_run "$srv/down" "--retry 1 --retry-delay 0"
+kill "$srv_pid" 2>/dev/null
+
 # snap_download retries a failing "snap download" (Snap Store rate limits)
 mkdir -p "$tmp/sd/bin" "$tmp/sd/out"
 cat >"$tmp/sd/bin/snap" <<'STUB'

@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `debmirror` is retried 5 times, 1, 2, 4 and 8 minutes apart (about 15 minutes
   in all), instead of 3 times 1 minute apart, so a short outage of the archive
   or a PPA (HTTP 503) no longer fails the download.
+- Every other download is retried during outages too: repository and key
+  downloads (curl, up to 15 minutes with backoff), and Launchpad and keyserver
+  lookups for `--ppa` (like the Snap Store API). A repository is only reported
+  as "not found (flat repos are not supported)" on a real HTTP 404; an outage is
+  now reported as "cannot reach ... (HTTP 503)".
 - `--snap`: `snap download` is retried (5 attempts, 10 to 80 s apart) when the
   Snap Store rate-limits or fails, like the Snap Store API queries already were.
 - CI no longer cancels a run on `main` (or a tag) when a newer push arrives, so
