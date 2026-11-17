@@ -179,6 +179,24 @@ else
 fi
 expect "snap download: gives up after 5 tries" 1 "sleep 80"               -- sd_run 9
 
+# _missing: 404s on the mirror, minus InRelease when Release.gpg exists
+mkdir -p "$tmp/mm/repos/ppa/dists/resolute" "$tmp/mm/repos/x/dists/resolute"
+touch "$tmp/mm/repos/ppa/dists/resolute/Release" "$tmp/mm/repos/x/dists/resolute/Release"
+echo sig >"$tmp/mm/repos/ppa/dists/resolute/Release.gpg"
+cat >"$tmp/mm.log" <<'LOG'
+127.0.0.1 - - [17/Nov/2026 17:47:56] "GET /repos/ppa/dists/resolute/InRelease HTTP/1.1" 404 -
+127.0.0.1 - - [17/Nov/2026 17:47:56] "GET /repos/ppa/dists/resolute/Release HTTP/1.1" 200 -
+127.0.0.1 - - [17/Nov/2026 17:47:56] "GET /repos/x/dists/resolute/InRelease HTTP/1.1" 404 -
+127.0.0.1 - - [17/Nov/2026 17:47:57] "GET /ubuntu/pool/main/h/hello/hello_1_amd64.deb HTTP/1.1" 404 -
+127.0.0.1 - - [17/Nov/2026 17:47:57] "GET /ubuntu/pool/main/h/hello/hello_1_amd64.deb HTTP/1.1" 404 -
+LOG
+got="$("$S" _missing -m "$tmp/mm" <"$tmp/mm.log" 2>&1 | tr '\n' ' ')"
+if [[ "$got" == "/repos/x/dists/resolute/InRelease /ubuntu/pool/main/h/hello/hello_1_amd64.deb " ]]; then
+  ok "404 report skips InRelease when Release.gpg exists"
+else
+  bad "404 report skips InRelease when Release.gpg exists" "got: $got"
+fi
+
 # The airgap.conf.example must be valid bash
 expect "example config parses"  0 ""                        -- bash -n "$root/airgap.conf.example"
 

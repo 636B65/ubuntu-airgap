@@ -118,7 +118,8 @@ if [[ "$AMD64V3" == 1 ]] && grep -qw avx2 /proc/cpuinfo; then
 fi
 
 echo "--- no 404s"
-if grep '" 404 ' "$LOG"; then fail "mirror returned 404"; fi
+missing="$($S _missing -m /media/usb/mirror <"$LOG")"
+[[ -z "$missing" ]] || { echo "$missing"; fail "mirror returned 404"; }
 
 echo "--- nothing left to upgrade"
 $S serve >/tmp/serve.log 2>&1 &
@@ -157,7 +158,7 @@ echo "--- second install run (idempotent, setup .deb already installed)"
 kill %1 2>/dev/null || true; sleep 0.5
 $S install -y --install-setup-debs | tee /tmp/install2.log
 grep -q "already installed; skipping" /tmp/install2.log || fail "setup .deb was reinstalled"
-grep -q '" 404 ' "$LOG" && fail "404 on second run"
+[[ -z "$($S _missing -m /media/usb/mirror <"$LOG")" ]] || fail "404 on second run"
 $S serve >/tmp/serve.log 2>&1 &
 for _ in $(seq 50); do (exec 3<>/dev/tcp/127.0.0.1/8080) 2>/dev/null && break; sleep 0.2; done
 
@@ -196,7 +197,8 @@ i386_before="$(count_i386)"
 echo "--- install -y (apt upgrade) succeeds"
 $S install -y 2>&1 | tee /tmp/install.log
 grep -q "foreign architectures enabled (i386)" /tmp/install.log || fail "no multiarch warning"
-if grep '" 404 ' "$LOG"; then fail "404s with i386 enabled"; fi
+missing="$($S _missing -m /media/usb/mirror <"$LOG")"
+[[ -z "$missing" ]] || { echo "$missing"; fail "404s with i386 enabled"; }
 if grep -q 'binary-i386' "$LOG"; then fail "apt requested i386 indexes"; fi
 upg="$(apt list --upgradable 2>/dev/null | tail -n +2)"
 [[ "$upg" == libc6/* || "$upg" == *$'\n'libc6/* ]] || fail "expected libc6 to be kept back (multiarch pair), got: $upg"

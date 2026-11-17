@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   minutes, because the Snap Store can rate-limit for several minutes. A repository is only reported
   as "not found (flat repos are not supported)" on a real HTTP 404; an outage is
   now reported as "cannot reach ... (HTTP 503)".
+- `install` no longer warns that `dists/SUITE/InRelease` is missing from the
+  mirror when `Release` and `Release.gpg` are there. debmirror keeps that pair
+  when an upstream `InRelease` cannot be fetched, and apt falls back to it.
 - `--snap`: `snap download` is retried (5 attempts, 10 to 80 s apart) when the
   Snap Store rate-limits or fails, like the Snap Store API queries already were.
 - CI no longer cancels a run on `main` (or a tag) when a newer push arrives, so

@@ -1000,12 +1000,25 @@ report_kept_back() {
   fi
 }
 
+# Paths the mirror answered with 404, minus apt's normal fallback: a missing
+# dists/SUITE/InRelease when Release.gpg is there (debmirror keeps the
+# Release + Release.gpg pair when an upstream InRelease could not be fetched).
+missing_on_mirror() {  # server-log mirror-dir
+  local path
+  grep '" 404 ' "$1" 2>/dev/null | sed -E 's/.*"GET ([^ ?]+)[^ ]* .*/\1/' | sort -u \
+    | while IFS= read -r path; do
+        [[ "$path" == */dists/*/InRelease && -s "$2${path%InRelease}Release.gpg" ]] && continue
+        printf '%s\n' "$path"
+      done
+}
+
 report_404() {
-  local n; n="$(grep -c '" 404 ' "$SERVER_LOG" 2>/dev/null || true)"
-  if [[ "${n:-0}" -gt 0 ]]; then
-    warn "$n request(s) were not found on the mirror (see $SERVER_LOG):"
-    grep '" 404 ' "$SERVER_LOG" | sed -E 's/.*"GET ([^ ]+) .*/    \1/' | sort -u | head -20 >&2
-  fi
+  local missing n
+  missing="$(missing_on_mirror "$SERVER_LOG" "$MIRROR_DIR")"
+  [[ -n "$missing" ]] || return 0
+  n="$(wc -l <<<"$missing")"
+  warn "$n path(s) were not found on the mirror (see $SERVER_LOG):"
+  head -20 <<<"$missing" | sed 's/^/    /' >&2
 }
 
 # When amd64v3 is enabled, apt reinstalls installed amd64 packages as their
@@ -1191,6 +1204,7 @@ case "$CMD" in
   download)   cmd_download ;;
   _container) cmd_container ;;
   _classify-sim) classify_sim ;;          # internal, used by tests
+  _missing)   missing_on_mirror /dev/stdin "${MIRROR_DIR:?-m DIR}" ;;  # internal, tests: log on stdin
   install)    cmd_install ;;
   snaps)      cmd_snaps ;;
   serve)      cmd_serve ;;
