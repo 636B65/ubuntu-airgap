@@ -102,4 +102,32 @@ echo "SNAP CLIENT OK"
 EOS
 grep -qx "SNAP CLIENT OK" "$WORK/client.log" || fail "snap client test did not complete"
 
+# --- Refresh: an installed snap is updated offline to a newer revision -------
+# "hello" has different revisions in latest/stable and latest/edge.
+rev_of() { awk -F'|' -v n="$1" '$1=="snap" && $2==n {f=$3; sub(/.*_/,"",f); sub(/\.snap$/,"",f); print f}' "$M/airgap-mirror.conf"; }
+dl() { "$root/ubuntu-airgap.sh" download -d "$M" --suites resolute-security --components main \
+         --package-filter '^$' --snap "$SNAP" --snap "$1" >>"$WORK/download-refresh.log" 2>&1 \
+       || { tail -30 "$WORK/download-refresh.log"; fail "download $1 failed"; }; }
+
+step "Refresh: mirror hello=latest/stable, install offline"
+dl hello=latest/stable
+old="$(rev_of hello)"
+"${DOCKER[@]}" exec "$CT" /media/usb/mirror/ubuntu-airgap.sh snaps
+have="$("${DOCKER[@]}" exec "$CT" snap list hello | awk 'NR==2 {print $3}')"
+[[ "$have" == "$old" ]] || fail "hello: installed r$have, expected r$old"
+
+step "Refresh: mirror hello=latest/edge, update offline"
+dl hello=latest/edge
+new="$(rev_of hello)"
+if [[ "$new" == "$old" ]]; then
+  echo "stable and edge are both r$new today - refresh path not exercised"
+else
+  [[ ! -e "$M/snaps/hello_$old.snap" ]] || fail "old revision r$old not removed from the mirror"
+  "${DOCKER[@]}" exec "$CT" /media/usb/mirror/ubuntu-airgap.sh snaps | tee "$WORK/refresh.log"
+  grep -q "snap hello .*: $old -> revision $new" "$WORK/refresh.log" || fail "no refresh r$old -> r$new logged"
+  have="$("${DOCKER[@]}" exec "$CT" snap list hello | awk 'NR==2 {print $3}')"
+  [[ "$have" == "$new" ]] || fail "hello not refreshed: installed r$have, expected r$new"
+  echo "hello refreshed offline: r$old -> r$new"
+fi
+
 step "E2E SNAP PASSED"

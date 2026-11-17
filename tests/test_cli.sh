@@ -57,6 +57,24 @@ EOF
 expect "config file is read"    nonzero "OWNER/NAME"        -- "$S" download -c "$tmp/cfg"
 expect "missing config file"    nonzero "cannot read config" -- "$S" download -c "$tmp/nope"
 
+# Upgrade-plan classification (i386 removal guard, amd64v3 switch, downgrades)
+sim='Inst libc6 [2.43-2ubuntu2] (2.43-2ubuntu2.7 Ubuntu:26.04/resolute-updates [amd64])
+Inst bash [5.3-2ubuntu1] (5.3-2ubuntu1 Ubuntu:26.04/resolute [amd64])
+Inst foo [2.0] (1.0 Ubuntu:26.04/resolute [amd64])
+Remv libc6:i386 [2.43-2ubuntu2]
+Remv wine32:i386 [10.0-1]
+Remv oldpkg [1.0]
+Conf libc6 (2.43-2ubuntu2.7 Ubuntu:26.04/resolute-updates [amd64])'
+want='switch|bash
+down|foo 2.0 -> 1.0
+fremove|libc6:i386
+fremove|wine32:i386'
+if ! command -v dpkg >/dev/null; then          # downgrade check needs dpkg (always on Ubuntu)
+  want="$(grep -v '^down|' <<<"$want")"
+fi
+got="$("$S" _classify-sim <<<"$sim" 2>/dev/null)"
+if [[ "$got" == "$want" ]]; then ok "classify apt simulation"; else bad "classify apt simulation" "got: $(tr '\n' ';' <<<"$got")"; fi
+
 # The airgap.conf.example must be valid bash
 expect "example config parses"  0 ""                        -- bash -n "$root/airgap.conf.example"
 

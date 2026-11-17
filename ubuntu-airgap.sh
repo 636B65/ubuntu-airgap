@@ -936,25 +936,43 @@ report_404() {
 # amd64v3 build of the SAME version and lists them under "DOWNGRADING".
 # With -y apt refuses that unless --allow-downgrades is given, so allow it only
 # when every "downgrade" is such a same-version variant switch.
+# Classify "apt-get -s" output (stdin) into lines:
+#   switch|PKG              same version reinstalled (amd64v3 variant switch)
+#   down|PKG OLD -> NEW     real downgrade
+#   fremove|PKG:ARCH        removal of a foreign-architecture package
+classify_sim() {
+  local line pkg old new
+  local re_inst='^Inst ([^ ]+) \[([^]]+)\] \(([^ ]+) '   # Inst NAME [OLD] (NEW Origin/suite [arch])
+  local re_remv='^Remv ([^ ]+:[a-z0-9]+) '                  # Remv NAME:ARCH [VER] (native arch has no :ARCH)
+  while read -r line; do
+    if [[ "$line" =~ $re_remv ]]; then
+      if [[ "${BASH_REMATCH[1]}" != *:amd64 ]]; then echo "fremove|${BASH_REMATCH[1]}"; fi
+      continue
+    fi
+    [[ "$line" =~ $re_inst ]] || continue
+    pkg="${BASH_REMATCH[1]}"; old="${BASH_REMATCH[2]}"; new="${BASH_REMATCH[3]}"
+    if [[ "$old" == "$new" ]]; then echo "switch|$pkg"
+    elif dpkg --compare-versions "$new" lt "$old"; then echo "down|$pkg $old -> $new"; fi
+  done
+}
+
 ALLOW_VARIANT_SWITCH=()
 check_variant_switches() {
   ALLOW_VARIANT_SWITCH=()
-  local sim line pkg old new switch=0 real=() fremove=()
+  local sim cls kind val switch=0 real=() fremove=()
   local simcmd=(apt-get -s "$UPGRADE_CMD")
   [[ "$UPGRADE_CMD" == upgrade ]] && simcmd+=(-o APT::Get::Upgrade-Allow-New=true)
   sim="$("${simcmd[@]}" 2>/dev/null)" || return 0
-  local re='^Inst ([^ ]+) \[([^]]+)\] \(([^ ]+) '   # Inst NAME [OLD] (NEW Origin/suite [arch])
-  while read -r line; do
-    # full-upgrade may remove i386 packages (e.g. Wine/Steam libs) to upgrade
-    # their amd64 Multi-Arch: same twin - never do that unattended
-    if [[ "$line" =~ ^Remv\ ([^ ]+:[a-z0-9]+)\  && "${BASH_REMATCH[1]}" != *:amd64 ]]; then
-      fremove+=("${BASH_REMATCH[1]}"); continue
-    fi
-    [[ "$line" =~ $re ]] || continue
-    pkg="${BASH_REMATCH[1]}"; old="${BASH_REMATCH[2]}"; new="${BASH_REMATCH[3]}"
-    if [[ "$old" == "$new" ]]; then switch=$((switch + 1))
-    elif dpkg --compare-versions "$new" lt "$old"; then real+=("$pkg $old -> $new"); fi
-  done <<<"$sim"
+  cls="$(classify_sim <<<"$sim")"
+  # full-upgrade may remove i386 packages (e.g. Wine/Steam libs) to upgrade
+  # their amd64 Multi-Arch: same twin - never do that unattended
+  while IFS='|' read -r kind val; do
+    case "$kind" in
+      switch)  switch=$((switch + 1)) ;;
+      down)    real+=("$val") ;;
+      fremove) fremove+=("$val") ;;
+    esac
+  done <<<"$cls"
   if [[ ${#fremove[@]} -gt 0 ]]; then
     warn "apt $UPGRADE_CMD would REMOVE ${#fremove[@]} foreign-architecture package(s), because"
     warn "their architecture is not in the mirror: ${fremove[*]:0:15}"
@@ -1096,6 +1114,7 @@ cmd_restore() {
 case "$CMD" in
   download)   cmd_download ;;
   _container) cmd_container ;;
+  _classify-sim) classify_sim ;;          # internal, used by tests
   install)    cmd_install ;;
   snaps)      cmd_snaps ;;
   serve)      cmd_serve ;;

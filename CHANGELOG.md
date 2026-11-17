@@ -22,8 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Packages that apt keeps back are listed after the upgrade, with the
     Multi-Arch reason.
   - `install -y --full-upgrade` refuses to remove i386 packages.
-- End-to-end tests: a client with `libc6:i386` installed, and an offline snap
-  install in a systemd/snapd container whose network is disconnected (new CI job).
+- End-to-end tests:
+  - a client with `libc6:i386` installed at an older version;
+  - an offline snap install in a systemd/snapd container whose network is
+    disconnected, including an offline refresh of an installed snap to a newer
+    revision (new CI job);
+  - a CLI test that feeds canned `apt -s` output to the i386-removal guard.
 
 ## [0.1.1] - 2026-11-17
 

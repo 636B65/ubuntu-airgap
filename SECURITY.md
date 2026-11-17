@@ -28,6 +28,7 @@ things it trusts and the things it verifies:
 |---|---|
 | Ubuntu packages and indexes | `debmirror` checks the GPG signature and checksums when downloading. The air-gapped apt checks them **again** against the `ubuntu-archive-keyring` already on that machine, so a modified disk is detected. |
 | Extra repositories (`--repo`, `--ppa`, `--repo-deb`) | Signatures and checksums are checked with the repository's key. The keys are carried on the mirror disk and installed from there, so for these repos **the disk is trusted**. PPA keys are checked against the fingerprint Launchpad reports. |
+| Snaps (`--snap`) | Each `.snap` comes with its `.assert` file (Canonical's signed assertions). `snap ack` checks the signature chain against the store's root key built into snapd, and `snap install` checks the snap's hash against the signed revision. The disk is **not** trusted for snaps. |
 | `ubuntu-airgap.sh` on the disk | It runs as root on the air-gapped machine, so **the disk is trusted**. Compare it with the `SHA256SUMS` of the release, or keep a known-good copy on the air-gapped machine and run `install --mirror DIR`. |
 | HTTP server | Binds to `127.0.0.1` by default. With `serve --bind 0.0.0.0` the mirror is readable without authentication on the LAN; it contains only public packages. |
 
