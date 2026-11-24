@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- CI: ossf/scorecard-action back to 2.5.0. The 2.6.0 image on ghcr.io is broken
+  (its amd64 manifest returns 404), so the Scorecard job could not start;
+  Dependabot now skips 2.6.0. github/codeql-action/upload-sarif 4.39.4.
+- README: new "Docker or Podman" section.
+
 ## [0.3.0] - 2026-11-24
 
 ### Added
