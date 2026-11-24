@@ -16,7 +16,7 @@
 set -Eeuo pipefail
 trap 'printf "ERROR: unexpected failure at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
-VERSION="0.2.2"
+VERSION="0.2.3"
 SCRIPT_NAME="ubuntu-airgap.sh"
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 SELF_DIR="$(dirname "$SELF")"

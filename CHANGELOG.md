@@ -6,12 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-24
+
 ### Fixed
 
 - Downloads from archive.ubuntu.com failed with `403 Forbidden` for every
   `.deb`: the archive now rejects pool requests whose User-Agent is LWP's
   default `libwww-perl/X`, which debmirror sends and cannot change. debmirror
   now identifies as `debmirror (ubuntu-airgap)`.
+
+### Changed
+
+- CI: ruff 0.17.6, ossf/scorecard-action 2.6.0.
 
 ## [0.2.2] - 2026-11-17
 
@@ -143,7 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: ShellCheck, ruff, codespell, actionlint, markdownlint, unit tests, and an
   offline end-to-end test (amd64 and amd64v3). There is also a release workflow.
 
-[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/636B65/ubuntu-airgap/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/636B65/ubuntu-airgap/compare/v0.1.1...v0.2.0
