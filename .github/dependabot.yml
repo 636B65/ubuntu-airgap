@@ -9,6 +9,11 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "ci"
+    ignore:
+      # v2.6.0's image on ghcr.io is broken (its amd64 manifest returns 404),
+      # so the Scorecard job cannot start. Remove once a fixed release is out.
+      - dependency-name: ossf/scorecard-action
+        versions: ["2.6.0"]
 
   # Hash-locked CI lint tools (ruff, codespell, zizmor)
   - package-ecosystem: pip
