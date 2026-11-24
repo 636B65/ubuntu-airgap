@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Downloads from archive.ubuntu.com failed with `403 Forbidden` for every
+  `.deb`: the archive now rejects pool requests whose User-Agent is LWP's
+  default `libwww-perl/X`, which debmirror sends and cannot change. debmirror
+  now identifies as `debmirror (ubuntu-airgap)`.
+
 ## [0.2.2] - 2026-11-17
 
 ### Added

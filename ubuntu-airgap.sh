@@ -361,6 +361,19 @@ run_debmirror() {  # target method host root dists sections keyring arches
   # The archive republishes every ~30 min; a publish during the download makes
   # index checksums mismatch. A retry fetches the new, consistent set. Servers
   # also have short outages (503s): 5 attempts, 1/2/4/8 min apart (~15 min).
+  # archive.ubuntu.com answers 403 Forbidden for pool/ files when the
+  # User-Agent is LWP's default "libwww-perl/X" (debmirror has no option to
+  # change it), so replace LWP's default agent via a tiny preloaded module.
+  local ualib
+  ualib="$(mktemp -d)"
+  cat >"$ualib/AirgapUA.pm" <<'PERL'
+package AirgapUA;
+use LWP::UserAgent ();
+no warnings 'redefine';
+*LWP::UserAgent::_agent = sub { "debmirror (ubuntu-airgap)" };
+1;
+PERL
+  local -x PERL5LIB="$ualib${PERL5LIB:+:$PERL5LIB}" PERL5OPT="-MAirgapUA${PERL5OPT:+ $PERL5OPT}"
   local try out delay
   out="$(mktemp)"
   for try in 1 2 3 4 5; do
