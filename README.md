@@ -49,6 +49,8 @@ Open it in [draw.io](https://app.diagrams.net/) to edit. CI renders the PNG.</su
 - The air-gapped side needs only what Ubuntu Desktop already has: `bash`, `apt`,
   `python3` and (for snaps) `snapd`.
 - Reversible: `restore` puts the original apt sources back.
+- **Docker or Podman** on the online machine, including rootless Podman and
+  SELinux hosts (Fedora, RHEL). See [Docker or Podman](#docker-or-podman).
 
 ## Requirements
 
@@ -170,6 +172,37 @@ cp airgap.conf.example airgap.conf   # edit it
 ./ubuntu-airgap.sh download --config airgap.conf
 ```
 
+### Docker or Podman
+
+`download` runs debmirror in an `ubuntu:26.04` container. It works with either
+engine and picks one automatically:
+
+1. Docker, if `docker info` works for your user (for example, you are in the
+   `docker` group).
+2. Otherwise Podman, if `podman info` works (rootless Podman needs no setup).
+3. Otherwise Docker, then Podman, through `sudo`.
+
+To choose yourself, use `--engine docker` or `--engine podman`, or set
+`ENGINE="podman"` in the config file. The engine in use is printed at the
+start (`==> Container engine: podman (podman)`).
+
+```bash
+./ubuntu-airgap.sh download -d /media/$USER/AIRGAP/mirror --engine podman
+```
+
+With Podman, the script also:
+
+- uses the full image name `docker.io/library/ubuntu:26.04`, because Podman
+  does not guess a registry for short names when there is no terminal. A custom
+  `--image` is qualified the same way.
+- runs rootless Podman with `--userns=keep-id`, so the container can write to
+  the mirror directory and the files belong to you.
+- adds `--security-opt label=disable`, so SELinux does not block the mounted
+  mirror directory. Nothing on your disk is relabelled.
+
+Podman's `docker` command (the `podman-docker` package) is detected and handled
+as Podman.
+
 ## Air-gapped machine
 
 ```text
@@ -246,7 +279,7 @@ on the air-gapped machine:
 - Snaps are installed with `snap ack` and then `snap install`. snapd checks
   Canonical's signed assertions, so a modified `.snap` is rejected.
 - The download container runs as your user, not root, so the files on the disk
-  belong to you.
+  belong to you. With rootless Podman, no root daemon is involved at all.
 - Release files carry signed build provenance from this repository's release
   workflow. Check a downloaded script before copying it to the disk:
   `gh attestation verify ubuntu-airgap.sh --repo 636B65/ubuntu-airgap`.
@@ -269,6 +302,7 @@ tests/lint.sh                                       # every lint check CI runs
 tests/test_cli.sh                                   # fast CLI tests
 python3 -m unittest discover -s tests -v            # embedded Python helper
 tests/e2e.sh                                        # full offline test (Docker, ~300 MB download)
+ENGINE=podman tests/e2e.sh                          # same, but download with Podman
 AMD64V3=1 tests/e2e.sh                              # same, with the amd64v3 variant
 tests/e2e-snap.sh                                   # --snap + offline install (privileged docker)
 ```
@@ -296,7 +330,8 @@ What has been verified so far:
   implemented but not tested.
 
 CI runs ShellCheck, ruff, codespell, actionlint, markdownlint, zizmor (workflow
-security), the unit tests and the end-to-end test (amd64 and amd64v3) on every
+security), the unit tests and the end-to-end test (amd64 downloading with rootless
+Podman, amd64v3 with Docker) on every
 push, and once a week to catch upstream changes. CodeQL, OpenSSF Scorecard,
 Dependabot and secret scanning report to the repository's Security tab. All
 actions are pinned to commit SHAs.
