@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `download` works with Podman as well as Docker. The engine is picked
+  automatically (Docker if usable, else Podman, each tried without and then
+  with sudo), or set with `--engine docker|podman` / `ENGINE=` in the config.
+  Rootless Podman (`--userns=keep-id`), SELinux hosts and Podman's
+  `docker` shim are handled.
+
 ## [0.2.3] - 2026-11-24
 
 ### Fixed

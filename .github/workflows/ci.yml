@@ -88,14 +88,19 @@ jobs:
         run: python3 -W error -m unittest discover -s tests -v
 
   e2e:
-    name: End-to-end (${{ matrix.variant }})
+    name: End-to-end (${{ matrix.variant }}, ${{ matrix.engine }})
     needs: [lint, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        variant: [amd64, amd64v3]
+        include:
+          # The download runs with rootless Podman on one variant, Docker on the other
+          - variant: amd64
+            engine: podman
+          - variant: amd64v3
+            engine: docker
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,6 +112,7 @@ jobs:
       - name: Partial mirror + offline upgrade
         env:
           AMD64V3: ${{ matrix.variant == 'amd64v3' && '1' || '0' }}
+          ENGINE: ${{ matrix.engine }}
           WORK: ${{ runner.temp }}/e2e
         run: tests/e2e.sh
       - name: Upload logs on failure

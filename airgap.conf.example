@@ -17,6 +17,9 @@ COMPONENTS="main,restricted,universe,multiverse"     # "main,restricted" is ~40%
 # Airgapped clients with a capable CPU then use them automatically.
 AMD64V3=0
 
+# Container engine for the download: auto (Docker if usable, else Podman), docker or podman
+# ENGINE="auto"
+
 # 1 = also mirror Contents-* files (only needed for apt-file)
 CONTENTS=0
 
