@@ -4,6 +4,7 @@
 #
 #   tests/e2e.sh                 # amd64
 #   AMD64V3=1 tests/e2e.sh       # amd64 + amd64v3 variant
+#   ENGINE=podman tests/e2e.sh   # download with Podman (the client test uses Docker)
 #
 # The mirror contains all real (signed) index files, but only the .deb files the
 # test needs (via --package-filter), so it stays a few hundred MB.
@@ -16,6 +17,7 @@ set -Eeuo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AMD64V3="${AMD64V3:-0}"
+ENGINE="${ENGINE:-auto}"
 IMAGE="${IMAGE:-ubuntu:26.04}"
 WORK="${WORK:-$(mktemp -d)}"
 CLIENT_IMG="ubuntu-airgap-e2e-client:latest"
@@ -76,7 +78,7 @@ echo "package filter: $FILTER"
 
 step "Download (online)"
 v3=(); [[ "$AMD64V3" == 1 ]] && v3=(--amd64v3)
-"$root/ubuntu-airgap.sh" download -d "$WORK/mirror" --components main "${v3[@]}" \
+"$root/ubuntu-airgap.sh" download -d "$WORK/mirror" --engine "$ENGINE" --components main "${v3[@]}" \
   --package-filter "$FILTER" --ppa "$PPA" --repo-deb "$WORK/e2e-repo-setup_1.0_all.deb" \
   >"$WORK/download.log" 2>&1 || { tail -50 "$WORK/download.log"; fail "download failed"; }
 grep -E '^==>|Files to download' "$WORK/download.log"

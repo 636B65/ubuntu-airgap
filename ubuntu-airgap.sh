@@ -2,7 +2,7 @@
 # ubuntu-airgap.sh - Offline (airgap) update mirror for Ubuntu 26.04 "resolute"
 #
 #   ONLINE machine : ./ubuntu-airgap.sh download --dest /mnt/usb/mirror [options]
-#                    Starts an ubuntu:26.04 docker container that builds a REAL
+#                    Starts an ubuntu:26.04 container (Docker or Podman) that builds a REAL
 #                    Ubuntu mirror (dists/ + pool/, original signed InRelease) with
 #                    debmirror, plus any extra repositories you add.
 #
@@ -27,6 +27,7 @@ SELF_DIR="$(dirname "$SELF")"
 DEST=""
 RELEASE="resolute"
 BASE_IMAGE="ubuntu:26.04"
+ENGINE="auto"                              # container engine: auto | docker | podman
 UBUNTU_HOST="archive.ubuntu.com"
 UBUNTU_ROOT="ubuntu"
 UBUNTU_METHOD="http"
@@ -82,7 +83,8 @@ cat <<EOF
 ${C_B}ubuntu-airgap.sh $VERSION${C_0} - offline Ubuntu mirror + airgap upgrader
 
 ${C_B}COMMANDS${C_0}
-  download   (online machine)  Build/refresh the mirror in a docker container.
+  download   (online machine)  Build/refresh the mirror in a container (Docker
+                               or Podman, whichever is installed).
   install    (airgap machine)  Serve the mirror, configure apt, update + upgrade,
                                then install/refresh the snaps from the mirror.
   snaps      (airgap machine)  Only install/refresh the snaps from the mirror.
@@ -124,7 +126,10 @@ ${C_B}DOWNLOAD OPTIONS${C_0}
                             Downloaded with their signed .assert files.
   --package-filter REGEX    Only download .deb files whose path matches REGEX (all
                             index files are still mirrored). For tests/partial mirrors.
-  --image IMAGE             Docker base image (default: $BASE_IMAGE)
+  --image IMAGE             Container base image (default: $BASE_IMAGE)
+  --engine auto|docker|podman
+                            Container engine (default: auto = Docker if usable,
+                            else Podman, each tried without and then with sudo)
   --dry-run                 Fetch indexes only and report how much would be downloaded.
   --debmirror-arg ARG       Pass an extra argument to debmirror (repeatable).
 
@@ -201,6 +206,7 @@ while [[ $# -gt 0 ]]; do
     --no-snaps)         NO_SNAPS=1 ;;
     --package-filter)   PACKAGE_FILTER="$2"; shift ;;
     --image)            BASE_IMAGE="$2"; shift ;;
+    --engine)           ENGINE="$2"; shift ;;
     --dry-run)          DRY_RUN=1 ;;
     --debmirror-arg)    DEBMIRROR_EXTRA+=("$2"); shift ;;
     -m|--mirror)        MIRROR_DIR="$2"; shift ;;
@@ -245,14 +251,42 @@ parse_repo() {
 # ============================================================================
 # DOWNLOAD (online host side)
 # ============================================================================
-docker_cmd() {
-  if docker info >/dev/null 2>&1; then DOCKER=(docker)
-  elif sudo -n docker info >/dev/null 2>&1 || sudo docker info >/dev/null; then DOCKER=(sudo docker)
-  else die "docker is not usable (install it, or add yourself to the docker group)"; fi
+# Pick the container engine: sets DOCKER (the command, maybe with sudo) and
+# ENGINE_KIND (docker|podman). "docker" may be Podman's docker-compatible shim.
+engine_cmd() {
+  local cands=() c installed=()
+  case "$ENGINE" in
+    auto)          cands=(docker podman) ;;
+    docker|podman) cands=("$ENGINE") ;;
+    *) die "--engine must be auto, docker or podman (got '$ENGINE')" ;;
+  esac
+  for c in "${cands[@]}"; do command -v "$c" >/dev/null && installed+=("$c"); done
+  [[ ${#installed[@]} -gt 0 ]] || die "no container engine found: install Docker or Podman"
+  DOCKER=()
+  for c in "${installed[@]}"; do            # without sudo first (rootless Podman, docker group)
+    if "$c" info >/dev/null 2>&1; then DOCKER=("$c"); break; fi
+  done
+  if [[ ${#DOCKER[@]} -eq 0 ]]; then
+    for c in "${installed[@]}"; do
+      if sudo -n "$c" info >/dev/null 2>&1 || sudo "$c" info >/dev/null 2>&1; then DOCKER=(sudo "$c"); break; fi
+    done
+  fi
+  [[ ${#DOCKER[@]} -gt 0 ]] || die "${installed[*]} is installed but not usable (start its service, or add yourself to the docker group)"
+  if "${DOCKER[@]}" --version 2>/dev/null | grep -qi podman; then ENGINE_KIND=podman; else ENGINE_KIND=docker; fi
+  log "Container engine: ${DOCKER[*]} ($ENGINE_KIND)"
+}
+
+# Podman does not assume docker.io for short image names (and refuses to ask
+# without a terminal), so qualify them: ubuntu:26.04 -> docker.io/library/ubuntu:26.04
+qualify_image() {
+  local img="$1" first="${1%%/*}"
+  if [[ "$img" != */* ]]; then echo "docker.io/library/$img"
+  elif [[ "$first" != *.* && "$first" != *:* && "$first" != localhost ]]; then echo "docker.io/$img"
+  else echo "$img"; fi
 }
 
 cmd_download() {
-  # Validate everything before touching docker
+  # Validate everything before starting a container
   [[ -n "$DEST" ]] || die "--dest DIR is required"
   local r p d
   for r in "${REPOS[@]}"; do
@@ -273,20 +307,34 @@ cmd_download() {
       die "--repo-deb '$d' is not a readable .deb file or http(s) URL"
     fi
   done
-  command -v docker >/dev/null || die "docker is not installed"
+  [[ "$ENGINE" =~ ^(auto|docker|podman)$ ]] || die "--engine must be auto, docker or podman (got '$ENGINE')"
 
   mkdir -p "$DEST"; DEST="$(readlink -f "$DEST")"
-  docker_cmd
+  engine_cmd
 
+  local base="$BASE_IMAGE" run_opts=()
+  if [[ $ENGINE_KIND == podman ]]; then
+    base="$(qualify_image "$BASE_IMAGE")"
+    # Rootless Podman: map our uid to the same uid in the container, so the
+    # mirror files are ours and the mounted directory is writable
+    if [[ "$("${DOCKER[@]}" info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" == true ]]; then
+      run_opts+=(--userns=keep-id)
+    fi
+    # SELinux hosts (Fedora, RHEL) would block the bind mounts otherwise
+    run_opts+=(--security-opt label=disable)
+  fi
   local img="ubuntu-airgap-mirror:${BASE_IMAGE//[:\/]/-}"
-  log "Preparing docker image $img (from $BASE_IMAGE)"
-  "${DOCKER[@]}" build -q -t "$img" - >/dev/null <<EOF
-FROM $BASE_IMAGE
+  log "Preparing container image $img (from $base)"
+  local ctx; ctx="$(mktemp -d)"
+  cat >"$ctx/Dockerfile" <<EOF
+FROM $base
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
       debmirror gpgv gnupg ca-certificates curl xz-utils bzip2 python3 python3-yaml \\
       ubuntu-keyring snapd squashfs-tools \\
     && rm -rf /var/lib/apt/lists/*
 EOF
+  "${DOCKER[@]}" build -q -t "$img" "$ctx" >/dev/null || { rm -rf "$ctx"; die "building image $img failed"; }
+  rm -rf "$ctx"
 
   # Key files given as local paths are mounted into the container
   local mounts=() i=0 newrepos=()
@@ -315,7 +363,7 @@ EOF
   if [[ $CONTENTS -eq 1 ]]; then flags+=(--contents); fi
   if [[ $DRY_RUN -eq 1 ]]; then flags+=(--dry-run); fi
   log "Starting mirror container (output: $DEST)"
-  "${DOCKER[@]}" run --rm -i "${tty[@]}" \
+  "${DOCKER[@]}" run --rm -i "${tty[@]}" "${run_opts[@]}" \
     --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -v "$DEST:/mirror" -v "$SELF:/opt/$SCRIPT_NAME:ro" "${mounts[@]}" \
     "$img" bash "/opt/$SCRIPT_NAME" _container \
@@ -337,7 +385,7 @@ EOF
 }
 
 # ============================================================================
-# _container: runs inside the docker container (debmirror)
+# _container: runs inside the mirror container (debmirror)
 # ============================================================================
 run_debmirror() {  # target method host root dists sections keyring arches
   local target="$1" method="$2" host="$3" root="$4" dists="$5" sections="$6" keyring="$7" arches="$8"

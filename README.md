@@ -10,7 +10,7 @@ Keep an **air-gapped Ubuntu 26.04 LTS** ("resolute") machine up to date with a
 
 | Where | Command | What happens |
 |---|---|---|
-| Online machine | `./ubuntu-airgap.sh download -d /media/disk/mirror` | Starts an `ubuntu:26.04` Docker container that builds/refreshes a mirror (`dists/` + `pool/`, the original **signed** `InRelease` files) with `debmirror`, plus any extra repositories, PPAs and vendor repos you add. |
+| Online machine | `./ubuntu-airgap.sh download -d /media/disk/mirror` | Starts an `ubuntu:26.04` container (Docker or Podman) that builds/refreshes a mirror (`dists/` + `pool/`, the original **signed** `InRelease` files) with `debmirror`, plus any extra repositories, PPAs and vendor repos you add. |
 | Air-gapped machine | `sudo /media/disk/mirror/ubuntu-airgap.sh install` | Serves the mirror with `python3 -m http.server`, points apt at it, runs `apt update` and `apt upgrade`. |
 
 It is **not** an apt cache that gets copied around. The disk holds a normal Ubuntu
@@ -54,7 +54,7 @@ Open it in [draw.io](https://app.diagrams.net/) to edit. CI renders the PNG.</su
 
 | Online machine | Air-gapped machine |
 |---|---|
-| Linux with Docker (any distro), `bash` | Ubuntu 26.04 (amd64) |
+| Linux with Docker or Podman (any distro, rootless Podman works), `bash` | Ubuntu 26.04 (amd64) |
 | Internet access | `python3` (installed by default on Ubuntu Desktop) |
 | Disk space, see [Sizes](#sizes) | Read access to the mirror disk |
 
@@ -103,7 +103,8 @@ Use `--dry-run` to see the exact number before downloading.
 --repo-deb URL|FILE       Repositories from a vendor repo-setup .deb (repeatable)
 --snap NAME[=CHANNEL]     Snap to download, e.g. firefox or firefox=latest/beta (repeatable)
 --package-filter REGEX    Only download .debs whose path matches (tests/partial mirrors)
---image IMAGE             Docker base image (default: ubuntu:26.04)
+--image IMAGE             Container base image (default: ubuntu:26.04)
+--engine auto|docker|podman  Container engine (default: auto: Docker if usable, else Podman)
 --dry-run                 Fetch indexes only and report the download size
 --debmirror-arg ARG       Extra debmirror argument (repeatable)
 ```

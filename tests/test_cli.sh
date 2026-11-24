@@ -57,6 +57,45 @@ EOF
 expect "config file is read"    nonzero "OWNER/NAME"        -- "$S" download -c "$tmp/cfg"
 expect "missing config file"    nonzero "cannot read config" -- "$S" download -c "$tmp/nope"
 
+# Container engine detection, with fake docker/podman commands first in PATH.
+# fake_engine NAME WORKS VERSION_TEXT DIR: "info" succeeds only if WORKS=1;
+# build and run are logged to $tmp/engine.log (with the Dockerfile) and do nothing.
+fake_engine() {
+  mkdir -p "$tmp/bin-$4"
+  cat >"$tmp/bin-$4/$1" <<EOF
+#!/bin/sh
+case "\$1" in
+  info) [ "$2" = 1 ] || exit 1; [ "\$2" = --format ] && echo false; exit 0 ;;
+  --version) echo "$3"; exit 0 ;;
+  build) echo "$1 \$*" >>"$tmp/engine.log"; for a; do d="\$a"; done; cat "\$d/Dockerfile" >>"$tmp/engine.log" ;;
+  *) echo "$1 \$*" >>"$tmp/engine.log" ;;
+esac
+EOF
+  chmod +x "$tmp/bin-$4/$1"
+}
+fake_engine docker 0 "Docker version 29.0.0" a;  fake_engine podman 1 "podman version 5.6.0" a
+fake_engine docker 1 "Docker version 29.0.0" b;  fake_engine podman 1 "podman version 5.6.0" b
+fake_engine docker 1 "podman version 5.6.0"  c   # podman-docker shim
+dl=(download -d "$tmp/m" --dry-run)
+expect "engine: bad value"      nonzero "--engine must be"  -- "$S" "${dl[@]}" --engine lxc
+expect "engine: auto -> podman when docker is not usable" 0 "Container engine: podman \(podman\)" \
+  -- env PATH="$tmp/bin-a:$PATH" "$S" "${dl[@]}"
+expect "engine: auto prefers docker" 0 "Container engine: docker \(docker\)" \
+  -- env PATH="$tmp/bin-b:$PATH" "$S" "${dl[@]}"
+expect "engine: --engine podman" 0 "Container engine: podman \(podman\)" \
+  -- env PATH="$tmp/bin-b:$PATH" "$S" "${dl[@]}" --engine podman
+expect "engine: config ENGINE=podman" 0 "Container engine: podman" \
+  -- env PATH="$tmp/bin-b:$PATH" "$S" "${dl[@]}" -c <(echo 'ENGINE=podman')
+expect "engine: podman-docker shim is podman" 0 "Container engine: docker \(podman\)" \
+  -- env PATH="$tmp/bin-c:$PATH" "$S" "${dl[@]}" --engine docker
+: >"$tmp/engine.log"
+env PATH="$tmp/bin-a:$PATH" "$S" "${dl[@]}" >/dev/null 2>&1
+expect "engine: podman gets a qualified image" 0 "^FROM docker.io/library/ubuntu:26.04$" -- cat "$tmp/engine.log"
+expect "engine: podman run has label=disable" 0 "^podman run .*label=disable" -- cat "$tmp/engine.log"
+: >"$tmp/engine.log"
+env PATH="$tmp/bin-b:$PATH" "$S" "${dl[@]}" >/dev/null 2>&1
+expect "engine: docker keeps the image name" 0 "^FROM ubuntu:26.04$" -- cat "$tmp/engine.log"
+
 # Upgrade-plan classification (i386 removal guard, amd64v3 switch, downgrades)
 sim='Inst libc6 [2.43-2ubuntu2] (2.43-2ubuntu2.7 Ubuntu:26.04/resolute-updates [amd64])
 Inst bash [5.3-2ubuntu1] (5.3-2ubuntu1 Ubuntu:26.04/resolute [amd64])
