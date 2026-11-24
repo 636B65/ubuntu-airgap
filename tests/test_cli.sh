@@ -96,6 +96,19 @@ expect "engine: podman run has label=disable" 0 "^podman run .*label=disable" --
 env PATH="$tmp/bin-b:$PATH" "$S" "${dl[@]}" >/dev/null 2>&1
 expect "engine: docker keeps the image name" 0 "^FROM ubuntu:26.04$" -- cat "$tmp/engine.log"
 
+# verify_dists: index files must match their Release (archive publish during download)
+vd="$tmp/vd/dists/resolute"; mkdir -p "$vd/main/dep11"
+echo good >"$vd/main/dep11/Components-amd64.yml"; echo stale >"$vd/main/dep11/icons-64x64.tar.gz"
+{ echo "Origin: Ubuntu"; echo "SHA256:"
+  printf ' %s %s main/dep11/Components-amd64.yml\n' "$(sha256sum <"$vd/main/dep11/Components-amd64.yml" | cut -d' ' -f1)" 5
+  printf ' %s %s main/dep11/icons-64x64.tar.gz\n' "$(printf new | sha256sum | cut -d' ' -f1)" 3
+  printf ' %s %s main/binary-amd64/Packages.xz\n' "$(printf x | sha256sum | cut -d' ' -f1)" 1
+} >"$vd/Release"
+expect "verify-dists: mismatch fails"   nonzero "does not match its Release.*icons-64x64" -- "$S" _verify-dists -m "$tmp/vd"
+expect "verify-dists: bad file removed" 0 "" -- test ! -e "$vd/main/dep11/icons-64x64.tar.gz"
+expect "verify-dists: good file kept"   0 "" -- test -e "$vd/main/dep11/Components-amd64.yml"
+expect "verify-dists: then passes"      0 "" -- "$S" _verify-dists -m "$tmp/vd"
+
 # Upgrade-plan classification (i386 removal guard, amd64v3 switch, downgrades)
 sim='Inst libc6 [2.43-2ubuntu2] (2.43-2ubuntu2.7 Ubuntu:26.04/resolute-updates [amd64])
 Inst bash [5.3-2ubuntu1] (5.3-2ubuntu1 Ubuntu:26.04/resolute [amd64])
@@ -124,7 +137,7 @@ t="${!#}"; [[ -d "$t" ]] && { echo "No packages after parsing Packages and Sourc
 mkdir -p "$t/dists"; echo "All done."
 STUB
 chmod +x "$tmp/dm/bin/debmirror"
-dm_fn="$(sed -n '/^run_debmirror() {/,/^}/p' "$S")"
+dm_fn="$(sed -n '/^run_debmirror() {/,/^}/p; /^verify_dists() {/,/^}/p' "$S")"
 dm_run() {  # TARGET: run run_debmirror with the stub; sleep must never be reached
   PATH="$tmp/dm/bin:$PATH" bash -c 'set -Eeuo pipefail
     log() { :; }; warn() { echo "WARNING: $*" >&2; }; die() { echo "ERROR: $*" >&2; exit 1; }
@@ -161,6 +174,28 @@ dm_flaky() {  # FAILS: prints the sleeps and whether it gave up, one line
 }
 expect "debmirror: outage retried with backoff" 0 "^60 120 240 \$"   -- dm_flaky 3
 expect "debmirror: gives up after 5 attempts"  0 "^60 120 240 480 gave-up \$" -- dm_flaky 9
+
+# run_debmirror retries when an index file does not match its Release (the
+# stub's first run leaves a stale dep11 file, like an archive publish mid-run)
+cat >"$tmp/dm/bin/debmirror-race" <<'STUB'
+#!/usr/bin/env bash
+n="$(cat "$DM_COUNT" 2>/dev/null || echo 0)"; echo $((n + 1)) >"$DM_COUNT"
+d="${!#}/dists/r"; mkdir -p "$d/main/dep11"
+if [[ $n -eq 0 ]]; then echo old >"$d/main/dep11/Components-amd64.yml"; else echo new >"$d/main/dep11/Components-amd64.yml"; fi
+printf 'SHA256:\n %s 4 main/dep11/Components-amd64.yml\n' "$(echo new | sha256sum | cut -d' ' -f1)" >"$d/Release"
+echo "All done."
+STUB
+chmod +x "$tmp/dm/bin/debmirror-race"
+dm_race() {
+  rm -rf "$tmp/dm/count" "$tmp/dm/race" "$tmp/dm/events"
+  mkdir -p "$tmp/dm/rbin"; ln -sf "$tmp/dm/bin/debmirror-race" "$tmp/dm/rbin/debmirror"
+  PATH="$tmp/dm/rbin:$PATH" DM_COUNT="$tmp/dm/count" EV="$tmp/dm/events" bash -c 'set -Eeuo pipefail
+    log() { :; }; warn() { :; }; die() { echo "gave-up" >>"$EV"; exit 1; }; sleep() { echo "$1" >>"$EV"; }
+    CONTENTS=0 DRY_RUN=0 PACKAGE_FILTER="" DEBMIRROR_EXTRA=()
+    eval "$1"; run_debmirror "$2" http h r d s /k amd64' _ "$dm_fn" "$tmp/dm/race" >/dev/null 2>&1
+  echo "$(tr '\n' ' ' <"$tmp/dm/events" 2>/dev/null)runs=$(cat "$tmp/dm/count") $(cat "$tmp/dm/race/dists/r/main/dep11/Components-amd64.yml")"
+}
+expect "debmirror: Release mismatch is retried" 0 "^60 runs=2 new$" -- dm_race
 
 # check_repo_suite: a 503 outage is retried, only a 404 means "not found"
 cat >"$tmp/srv.py" <<'PY'

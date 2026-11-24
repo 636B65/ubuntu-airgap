@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Rootless Podman (`--userns=keep-id`), SELinux hosts and Podman's
   `docker` shim are handled.
 
+### Fixed
+
+- A mirror could contain DEP-11 or command-not-found index files that do not
+  match the signed Release file (apt: "File has unexpected size ... Mirror
+  sync in progress?") when the archive published during the download:
+  debmirror does not verify those files. Every index file is now checked
+  against its Release after debmirror; mismatches are fetched again.
+
 ## [0.2.3] - 2026-11-24
 
 ### Fixed

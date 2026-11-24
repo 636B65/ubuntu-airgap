@@ -428,7 +428,7 @@ PERL
     if [[ -n "$PACKAGE_FILTER" && -d "$target" ]] && [[ -z "$(find "$target" -name '*.deb' -print -quit)" ]]; then
       rm -rf "$target"
     fi
-    if debmirror "${a[@]}" "$target" 2>&1 | tee "$out"; then rm -f "$out"; return 0; fi
+    if debmirror "${a[@]}" "$target" 2>&1 | tee "$out" && verify_dists "$target"; then rm -f "$out"; return 0; fi
     # Empty pocket: nothing in it matches --package-filter, but the directory
     # still holds .debs from an earlier run, so debmirror's anti-nuke check
     # refuses. Those .debs no longer match the filter (debmirror's cleanup
@@ -436,7 +436,7 @@ PERL
     if [[ -n "$PACKAGE_FILTER" ]] && grep -q '^No packages after parsing' "$out"; then
       warn "no packages in $dists ($sections) match --package-filter; mirroring index files only"
       rm -rf "$target"
-      if debmirror "${a[@]}" "$target" 2>&1 | tee "$out"; then rm -f "$out"; return 0; fi
+      if debmirror "${a[@]}" "$target" 2>&1 | tee "$out" && verify_dists "$target"; then rm -f "$out"; return 0; fi
     fi
     [[ $try -lt 5 ]] || break
     delay=$((60 * 2 ** (try - 1)))
@@ -445,6 +445,46 @@ PERL
   done
   rm -f "$out"
   die "debmirror failed for $method://$host/$root"
+}
+
+# Check every index file under DIR/dists against the SHA256 list in its Release
+# file. debmirror does not verify the DEP-11 and command-not-found files it
+# fetches, so an archive publish during the download can leave files that apt
+# rejects ("File has unexpected size"). Mismatched files are deleted (the next
+# debmirror attempt fetches them again) and the check fails.
+verify_dists() {
+  [[ $DRY_RUN -eq 1 ]] && return 0
+  python3 -I - "$1" <<'PY'
+import hashlib, os, sys
+root = os.path.join(sys.argv[1], "dists")
+bad = []
+for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [d for d in dirnames if d != "by-hash"]
+    if "Release" not in filenames:
+        continue
+    section = None
+    with open(os.path.join(dirpath, "Release"), encoding="utf-8", errors="replace") as f:
+        for line in f.read().splitlines():
+            if line and not line.startswith(" "):
+                section = line.split(":", 1)[0]
+                continue
+            if section != "SHA256" or not line.strip():
+                continue
+            want, size, name = line.split()
+            path = os.path.join(dirpath, name)
+            if not os.path.isfile(path):
+                continue
+            h = hashlib.sha256()
+            with open(path, "rb") as g:
+                for chunk in iter(lambda: g.read(1 << 20), b""):
+                    h.update(chunk)
+            if os.path.getsize(path) != int(size) or h.hexdigest() != want:
+                bad.append(os.path.relpath(path, sys.argv[1]))
+                os.unlink(path)
+for b in bad:
+    print(f"index file does not match its Release (archive changed during the download?): {b}", file=sys.stderr)
+sys.exit(1 if bad else 0)
+PY
 }
 
 # Recreate dists/**/by-hash/SHA256/<hash> entries listed in Release files, like
@@ -1265,6 +1305,7 @@ case "$CMD" in
   download)   cmd_download ;;
   _container) cmd_container ;;
   _classify-sim) classify_sim ;;          # internal, used by tests
+  _verify-dists) verify_dists "${MIRROR_DIR:?-m DIR}" ;;  # internal, used by tests
   _missing)   missing_on_mirror /dev/stdin "${MIRROR_DIR:?-m DIR}" ;;  # internal, tests: log on stdin
   install)    cmd_install ;;
   snaps)      cmd_snaps ;;
