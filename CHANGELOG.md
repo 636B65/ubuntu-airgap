@@ -19,10 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A mirror could contain DEP-11 or command-not-found index files that do not
-  match the signed Release file (apt: "File has unexpected size ... Mirror
-  sync in progress?") when the archive published during the download:
-  debmirror does not verify those files. Every index file is now checked
-  against its Release after debmirror; mismatches are fetched again.
+  match the signed Release file, so `install` failed in `apt-get update`
+  ("File has unexpected size ... Mirror sync in progress?"). debmirror does not
+  verify those files, and archive.ubuntu.com can serve a stale file at the
+  plain path (seen for `main/dep11/Components-amd64.yml.gz`) while its
+  `by-hash` copy is correct. Every index file is now checked against its
+  Release after debmirror; a mismatched file is fetched again by hash, or the
+  download is retried.
 
 ## [0.2.3] - 2026-11-24
 

@@ -428,7 +428,7 @@ PERL
     if [[ -n "$PACKAGE_FILTER" && -d "$target" ]] && [[ -z "$(find "$target" -name '*.deb' -print -quit)" ]]; then
       rm -rf "$target"
     fi
-    if debmirror "${a[@]}" "$target" 2>&1 | tee "$out" && verify_dists "$target"; then rm -f "$out"; return 0; fi
+    if debmirror "${a[@]}" "$target" 2>&1 | tee "$out" && verify_dists "$target" "$method://$host/${root#/}"; then rm -f "$out"; return 0; fi
     # Empty pocket: nothing in it matches --package-filter, but the directory
     # still holds .debs from an earlier run, so debmirror's anti-nuke check
     # refuses. Those .debs no longer match the filter (debmirror's cleanup
@@ -436,7 +436,7 @@ PERL
     if [[ -n "$PACKAGE_FILTER" ]] && grep -q '^No packages after parsing' "$out"; then
       warn "no packages in $dists ($sections) match --package-filter; mirroring index files only"
       rm -rf "$target"
-      if debmirror "${a[@]}" "$target" 2>&1 | tee "$out" && verify_dists "$target"; then rm -f "$out"; return 0; fi
+      if debmirror "${a[@]}" "$target" 2>&1 | tee "$out" && verify_dists "$target" "$method://$host/${root#/}"; then rm -f "$out"; return 0; fi
     fi
     [[ $try -lt 5 ]] || break
     delay=$((60 * 2 ** (try - 1)))
@@ -449,40 +449,73 @@ PERL
 
 # Check every index file under DIR/dists against the SHA256 list in its Release
 # file. debmirror does not verify the DEP-11 and command-not-found files it
-# fetches, so an archive publish during the download can leave files that apt
-# rejects ("File has unexpected size"). Mismatched files are deleted (the next
-# debmirror attempt fetches them again) and the check fails.
-verify_dists() {
+# fetches, and the archive can serve a stale file at the plain path (seen for
+# dists/*/main/dep11/Components-amd64.yml.gz) while its by-hash copy, which is
+# what apt fetches, is correct. A mismatched file is fetched again by hash from
+# URL (when given); if that does not give the right file either, it is deleted
+# (the next debmirror attempt fetches it again) and the check fails.
+verify_dists() {  # DIR [UPSTREAM_URL]
   [[ $DRY_RUN -eq 1 ]] && return 0
-  python3 -I - "$1" <<'PY'
-import hashlib, os, sys
-root = os.path.join(sys.argv[1], "dists")
-bad = []
+  python3 -I - "$1" "${2:-}" <<'PY'
+import hashlib, os, posixpath, sys, urllib.request
+top, base = sys.argv[1], sys.argv[2].rstrip("/")
+root = os.path.join(top, "dists")
+
+def sha256(data_or_path):
+    h = hashlib.sha256()
+    if isinstance(data_or_path, bytes):
+        h.update(data_or_path)
+    else:
+        with open(data_or_path, "rb") as g:
+            for chunk in iter(lambda: g.read(1 << 20), b""):
+                h.update(chunk)
+    return h.hexdigest()
+
+def by_hash(rel_dir, name, want):
+    if not base:
+        return None
+    url = posixpath.join(base, rel_dir, posixpath.dirname(name), "by-hash", "SHA256", want)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ubuntu-airgap"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = r.read()
+    except Exception:
+        return None
+    return data if sha256(data) == want else None
+
+bad = fixed = 0
 for dirpath, dirnames, filenames in os.walk(root):
     dirnames[:] = [d for d in dirnames if d != "by-hash"]
     if "Release" not in filenames:
         continue
+    rel_dir = os.path.relpath(dirpath, top).replace(os.sep, "/")
     section = None
     with open(os.path.join(dirpath, "Release"), encoding="utf-8", errors="replace") as f:
-        for line in f.read().splitlines():
-            if line and not line.startswith(" "):
-                section = line.split(":", 1)[0]
-                continue
-            if section != "SHA256" or not line.strip():
-                continue
-            want, size, name = line.split()
-            path = os.path.join(dirpath, name)
-            if not os.path.isfile(path):
-                continue
-            h = hashlib.sha256()
-            with open(path, "rb") as g:
-                for chunk in iter(lambda: g.read(1 << 20), b""):
-                    h.update(chunk)
-            if os.path.getsize(path) != int(size) or h.hexdigest() != want:
-                bad.append(os.path.relpath(path, sys.argv[1]))
-                os.unlink(path)
-for b in bad:
-    print(f"index file does not match its Release (archive changed during the download?): {b}", file=sys.stderr)
+        lines = f.read().splitlines()
+    for line in lines:
+        if line and not line.startswith(" "):
+            section = line.split(":", 1)[0]
+            continue
+        if section != "SHA256" or not line.strip():
+            continue
+        want, size, name = line.split()
+        path = os.path.join(dirpath, name)
+        if not os.path.isfile(path):
+            continue
+        if os.path.getsize(path) == int(size) and sha256(path) == want:
+            continue
+        data = by_hash(rel_dir, name, want)
+        if data is not None:
+            with open(path + ".tmp", "wb") as g:
+                g.write(data)
+            os.replace(path + ".tmp", path)
+            fixed += 1
+            print(f"re-fetched by hash (stale on the server): {rel_dir}/{name}")
+            continue
+        bad += 1
+        os.unlink(path)
+        print(f"index file does not match its Release (archive changed during the download?): {rel_dir}/{name}",
+              file=sys.stderr)
 sys.exit(1 if bad else 0)
 PY
 }
@@ -1305,7 +1338,7 @@ case "$CMD" in
   download)   cmd_download ;;
   _container) cmd_container ;;
   _classify-sim) classify_sim ;;          # internal, used by tests
-  _verify-dists) verify_dists "${MIRROR_DIR:?-m DIR}" ;;  # internal, used by tests
+  _verify-dists) verify_dists "${MIRROR_DIR:?-m DIR}" "${VERIFY_URL:-}" ;;  # internal, used by tests
   _missing)   missing_on_mirror /dev/stdin "${MIRROR_DIR:?-m DIR}" ;;  # internal, tests: log on stdin
   install)    cmd_install ;;
   snaps)      cmd_snaps ;;

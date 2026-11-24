@@ -229,6 +229,20 @@ expect "repo check: 404 means not found"           1 "not found \(flat"    -- cr
 expect "repo check: outage is not 'not found'"     1 "cannot reach .*HTTP 503" -- crs_run "$srv/down" "--retry 1 --retry-delay 0"
 kill "$srv_pid" 2>/dev/null
 
+# verify_dists re-fetches a stale index by hash from upstream (the archive can
+# serve a stale file at the plain path while by-hash/SHA256/<hash> is right)
+up="$tmp/up/dists/r/main/dep11"; mkdir -p "$up/by-hash/SHA256"
+echo right >"$up/C.yml.gz"; h="$(sha256sum <"$up/C.yml.gz" | cut -d' ' -f1)"; mv "$up/C.yml.gz" "$up/by-hash/SHA256/$h"
+mkdir -p "$tmp/vm/dists/r/main/dep11"; echo stale >"$tmp/vm/dists/r/main/dep11/C.yml.gz"
+printf 'Acquire-By-Hash: yes\nSHA256:\n %s 6 main/dep11/C.yml.gz\n' "$h" >"$tmp/vm/dists/r/Release"
+python3 -I -u -m http.server 0 --bind 127.0.0.1 --directory "$tmp/up" >"$tmp/up.log" 2>&1 & up_pid=$!
+for _ in $(seq 50); do grep -q 'port' "$tmp/up.log" && break; python3 -c 'import time; time.sleep(0.1)'; done
+up_url="http://127.0.0.1:$(sed -n 's/.*port \([0-9]*\).*/\1/p' "$tmp/up.log" | head -1)"
+expect "verify-dists: stale file re-fetched by hash" 0 "re-fetched by hash.*C.yml.gz" \
+  -- env VERIFY_URL="$up_url" "$S" _verify-dists -m "$tmp/vm"
+expect "verify-dists: by-hash copy is in place" 0 "^right$" -- cat "$tmp/vm/dists/r/main/dep11/C.yml.gz"
+kill "$up_pid" 2>/dev/null
+
 # snap_download retries a failing "snap download" (Snap Store rate limits)
 mkdir -p "$tmp/sd/bin" "$tmp/sd/out"
 cat >"$tmp/sd/bin/snap" <<'STUB'
