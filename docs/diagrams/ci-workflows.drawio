@@ -34,7 +34,7 @@
         <mxCell id="n10" value="&lt;b&gt;unit&lt;/b&gt;&lt;br&gt;tests/test_cli.sh&lt;br&gt;python unittest&lt;br&gt;(sources parsers)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;align=left;spacingLeft=8;spacingRight=6;fontSize=12;fillColor=#ffffff;strokeColor=#6c8ebf;" vertex="1" parent="n8">
           <mxGeometry x="15" y="185" width="200" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="n11" value="e2e  (matrix: amd64, amd64v3) + e2e-snap" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="n8">
+        <mxCell id="n11" value="e2e  (matrix: amd64 + Podman, amd64v3 + Docker) + e2e-snap" style="swimlane;html=1;startSize=30;rounded=1;arcSize=3;fontSize=15;fontStyle=1;horizontal=1;swimlaneLine=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="n8">
           <mxGeometry x="260" y="45" width="620" height="230" as="geometry" />
         </mxCell>
         <mxCell id="n12" value="&lt;b&gt;1.&lt;/b&gt; build desktop-like&lt;br&gt;client image" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;align=center;fontSize=12;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="n11">
